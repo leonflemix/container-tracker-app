@@ -14,7 +14,9 @@ import {
     deleteDoc,
     query,
     where,
-    Timestamp
+    Timestamp,
+    getDocs,
+    writeBatch
 } from 'firebase/firestore';
 
 // --- Firebase Initialization ---
@@ -503,6 +505,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     
     const [isSaving, setIsSaving] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState('');
+    const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -576,7 +579,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                     const changes = [];
                     for (const key in formData) {
                         if (formData[key] !== container[key]) {
-                            changes.push(`${key} changed from '${container[key]}' to '${formData[key]}'`);
+                            changes.push(`${key} changed from '${container[key] || ''}' to '${formData[key]}'`);
                         }
                     }
                     
@@ -603,6 +606,89 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
             alert("Failed to save container. See console for details.");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!container) return;
+        
+        try {
+            // Delete container document
+            await deleteDoc(doc(db, containersPath, container.id));
+
+            // Batch delete all associated events
+            const eventsQuery = query(collection(db, eventsPath), where("containerId", "==", container.id));
+            const eventsSnapshot = await getDocs(eventsQuery);
+            const batch = writeBatch(db);
+            eventsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            
+            onClose();
+        } catch (error) {
+            console.error("Error deleting container and its events:", error);
+            alert("Failed to delete container. See console for details.");
+        }
+    };
+
+    const handleUndo = async () => {
+        if (!container || events.length < 2) {
+            alert("Cannot undo. No previous state found.");
+            return;
+        }
+
+        const lastEvent = events[0]; // Most recent event
+        const previousEvent = events[1]; // The state to revert to
+
+        try {
+            const containerRef = doc(db, containersPath, container.id);
+
+            // Reconstruct the previous state from the event before the last one
+            const changesToRevert = previousEvent.details.changes?.split('; ') || [];
+            
+            // Start with current container data and revert it
+            let previousState = { ...container };
+            // The very first event does not have changes, so we find its details.
+            // All subsequent events have changes.
+            if(previousEvent.details.changes){
+                 // We apply the changes from the previous state to get back to it.
+                 changesToRevert.forEach(change => {
+                    const match = change.match(/(.+) changed from '(.+)' to '(.+)'/);
+                    if (match) {
+                        const [, key, fromValue, ] = match;
+                        
+                        let revertedValue = fromValue;
+                        if (typeof container[key] === 'boolean') {
+                             revertedValue = (fromValue === 'true');
+                        } else if (typeof container[key] === 'number') {
+                             revertedValue = parseFloat(fromValue);
+                        }
+                        
+                        previousState[key] = revertedValue;
+                    }
+                });
+            } else {
+                 previousState = {
+                     ...previousState,
+                     status: 'New',
+                 };
+            }
+
+            // The state we are reverting to needs to have its timestamp updated
+            previousState.lastUpdate = Timestamp.now();
+            delete previousState.id;
+            
+            // Update the container with the reconstructed previous state
+            await setDoc(containerRef, previousState);
+
+            // Delete the last event that we are undoing
+            await deleteDoc(doc(db, eventsPath, lastEvent.id));
+
+            alert("Last update has been successfully undone.");
+            onClose();
+
+        } catch (error) {
+            console.error("Error undoing last update:", error);
+            alert("Failed to undo last update. See console for details.");
         }
     };
 
@@ -721,11 +807,30 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                                     <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
                                     <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={formData.hasHolesAfterSquish} onChange={handleChange} />
                                 </div>
-                                <div className="pt-4 flex justify-end gap-3">
-                                <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                                <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                                    {isSaving ? 'Saving...' : 'Save Changes'}
-                                </button>
+                                <div className="pt-4 flex justify-between items-center gap-3">
+                                    <div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setDeleteConfirmOpen(true)}
+                                            className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
+                                        >
+                                            Delete
+                                        </button>
+                                         <button
+                                            type="button"
+                                            onClick={handleUndo}
+                                            disabled={events.length < 2}
+                                            className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed"
+                                        >
+                                            Undo Last Update
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                                            {isSaving ? 'Saving...' : 'Save Changes'}
+                                        </button>
+                                    </div>
                                 </div>
                             </form>
                             <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
@@ -747,6 +852,13 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                         </div>
                     )}
                 </div>
+                 {isDeleteConfirmOpen && (
+                    <ConfirmationModal
+                        message={`Are you sure you want to permanently delete container ${container.id}? This will also delete all of its event history.`}
+                        onConfirm={handleDelete}
+                        onCancel={() => setDeleteConfirmOpen(false)}
+                    />
+                )}
             </div>
         </div>
     );
