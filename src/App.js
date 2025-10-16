@@ -1,6 +1,11 @@
+// File: src/container-tracker-app.jsx (or src/App.js)
+// Location: In the 'src' directory of your React project.
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { 
+    getFirestore,
     collection, 
     doc, 
     setDoc, 
@@ -11,7 +16,46 @@ import {
     where,
     Timestamp
 } from 'firebase/firestore';
-import { auth, db } from './firebase-config.js'; // Import from the new config file
+
+// --- Firebase Initialization ---
+// Merged from firebase-config.js to resolve import issues in this environment.
+
+// This configuration is now self-contained. It first checks for the special global
+// variables provided by your test environment. If not found, it falls back to
+// standard React environment variables (for Vercel deployment), and finally to
+// placeholder values for local development.
+
+let firebaseConfig;
+
+try {
+  // Use 'window' to safely check for global variables in a browser environment.
+  if (typeof window !== 'undefined' && typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
+    // Priority 1: Use the global config from the special test environment.
+    firebaseConfig = JSON.parse(window.__firebase_config);
+  } else if (process.env.REACT_APP_FIREBASE_CONFIG) {
+    // Priority 2: Use the environment variable for Vercel/standard deployments.
+    firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG);
+  } else {
+    // Priority 3: Fallback for local development if nothing else is set.
+    console.warn("Firebase config not found. Using placeholder values.");
+    firebaseConfig = {
+      apiKey: "AIzaSyDjM93MuLCX-S8KeZLL_cRe834bmfEWlY8",
+  authDomain: "container-tracker-app-4a7d5.firebaseapp.com",
+  projectId: "container-tracker-app-4a7d5",
+  storageBucket: "container-tracker-app-4a7d5.firebasestorage.app",
+  messagingSenderId: "840635230641",
+  appId: "1:840635230641:web:986f7472c844357b14b590",
+  measurementId: "G-4HLVJGLZEP"
+    };
+  }
+} catch (error) {
+  console.error("Error parsing Firebase config:", error);
+  firebaseConfig = { apiKey: "INVALID_CONFIG", authDomain: "", projectId: "" };
+}
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 // --- Helper Components & Data ---
 
@@ -105,16 +149,20 @@ export default function App() {
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Simplified collection paths for a single-project setup
-    const containersPath = 'containers';
-    const eventsPath = 'events';
-    const bookingsPath = 'bookings';
-    const collectionsPaths = {
-        drivers: 'drivers',
-        locations: 'locations',
-        chassis: 'chassis',
-        containerTypes: 'containerTypes',
-    };
+    // Adapt paths based on environment. This makes the app portable.
+    const isCanvasEnv = typeof window !== 'undefined' && typeof window.__app_id !== 'undefined';
+    const appId = isCanvasEnv ? window.__app_id : 'container-tracker-app';
+
+    const containersPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/containers` : 'containers', [appId, isCanvasEnv]);
+    const eventsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/events` : 'events', [appId, isCanvasEnv]);
+    const bookingsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/bookings` : 'bookings', [appId, isCanvasEnv]);
+    const collectionsPaths = useMemo(() => ({
+        drivers: isCanvasEnv ? `/artifacts/${appId}/public/data/drivers` : 'drivers',
+        locations: isCanvasEnv ? `/artifacts/${appId}/public/data/locations` : 'locations',
+        chassis: isCanvasEnv ? `/artifacts/${appId}/public/data/chassis` : 'chassis',
+        containerTypes: isCanvasEnv ? `/artifacts/${appId}/public/data/containerTypes` : 'containerTypes',
+    }), [appId, isCanvasEnv]);
+
 
     // --- Firebase Auth & Data Fetching ---
     useEffect(() => {
@@ -123,9 +171,15 @@ export default function App() {
                 setUser(currentUser);
             } else {
                 try {
-                    await signInAnonymously(auth);
+                    // This logic handles both custom tokens (from your test environment) and standard anonymous sign-in.
+                    const initialAuthToken = (typeof window !== 'undefined' && typeof window.__initial_auth_token !== 'undefined') ? window.__initial_auth_token : null;
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
                 } catch (error) {
-                    console.error("Anonymous authentication failed:", error);
+                    console.error("Authentication failed:", error);
                 }
             }
         });
@@ -142,7 +196,7 @@ export default function App() {
             );
             return () => unsubscribes.forEach(unsub => unsub());
         }
-    }, [user]);
+    }, [user, collectionsPaths]);
 
     useEffect(() => {
         if (user) {
@@ -162,7 +216,7 @@ export default function App() {
             });
             return () => unsubscribe();
         }
-    }, [user]);
+    }, [user, containersPath]);
 
     // Fetch bookings
     useEffect(() => {
@@ -179,7 +233,7 @@ export default function App() {
             });
             return () => unsubscribe();
         }
-    }, [user]);
+    }, [user, bookingsPath]);
 
     // Fetch events for selected container
     useEffect(() => {
@@ -197,7 +251,7 @@ export default function App() {
         } else {
             setEvents([]);
         }
-    }, [selectedContainer, user]);
+    }, [selectedContainer, user, eventsPath]);
 
     // --- Event Handlers ---
     const handleOpenModal = (container = null) => {
@@ -284,6 +338,8 @@ export default function App() {
                     onClose={handleCloseModal}
                     bookings={bookings}
                     collections={collectionsData}
+                    containersPath={containersPath}
+                    eventsPath={eventsPath}
                 />
             )}
             {isBookingModalOpen && (
@@ -415,7 +471,7 @@ const BookingModal = ({ onClose, bookingsPath, containerTypes }) => {
 
 
 // Modal for Adding/Editing a container
-const ContainerModal = ({ container, events, onClose, bookings, collections }) => {
+const ContainerModal = ({ container, events, onClose, bookings, collections, containersPath, eventsPath }) => {
     const isNew = !container;
     const [formData, setFormData] = useState(
         isNew 
@@ -437,9 +493,6 @@ const ContainerModal = ({ container, events, onClose, bookings, collections }) =
     
     const [isSaving, setIsSaving] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState('');
-
-    const containersPath = 'containers';
-    const eventsPath = 'events';
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
