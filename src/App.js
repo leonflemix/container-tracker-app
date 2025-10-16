@@ -40,12 +40,11 @@ try {
     console.warn("Firebase config not found. Using placeholder values.");
     firebaseConfig = {
       apiKey: "AIzaSyDjM93MuLCX-S8KeZLL_cRe834bmfEWlY8",
-  authDomain: "container-tracker-app-4a7d5.firebaseapp.com",
-  projectId: "container-tracker-app-4a7d5",
-  storageBucket: "container-tracker-app-4a7d5.firebasestorage.app",
-  messagingSenderId: "840635230641",
-  appId: "1:840635230641:web:986f7472c844357b14b590",
-  measurementId: "G-4HLVJGLZEP"
+      authDomain: "container-tracker-app-4a7d5.firebaseapp.com",
+      projectId: "container-tracker-app-4a7d5",
+      storageBucket: "container-tracker-app-4a7d5.firebasestorage.app",
+      messagingSenderId: "840635230641",
+      appId: "1:840635230641:web:986f7472c844357b14b590"
     };
   }
 } catch (error) {
@@ -148,6 +147,17 @@ export default function App() {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+
+    // --- Dynamically load Tailwind CSS ---
+    useEffect(() => {
+        const scriptId = 'tailwind-cdn';
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = 'https://cdn.tailwindcss.com';
+            document.head.appendChild(script);
+        }
+    }, []);
 
     // Adapt paths based on environment. This makes the app portable.
     const isCanvasEnv = typeof window !== 'undefined' && typeof window.__app_id !== 'undefined';
