@@ -507,9 +507,72 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     const [selectedLocation, setSelectedLocation] = useState('');
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
+    const isAtLocation = useMemo(() => {
+        if (!container || !collections.locations) return false;
+        return collections.locations.some(loc => loc.location === container.status);
+    }, [container, collections.locations]);
+
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    };
+    
+    const handleLocationSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedLocation) {
+            alert("Please select a location.");
+            return;
+        }
+        setIsSaving(true);
+        const containerRef = doc(db, containersPath, container.id.toUpperCase());
+
+        try {
+            const dataToUpdate = { status: selectedLocation, lastUpdate: Timestamp.now() };
+            await setDoc(containerRef, dataToUpdate, { merge: true });
+
+            const eventData = {
+                containerId: container.id.toUpperCase(),
+                timestamp: Timestamp.now(),
+                details: {
+                    action: 'Container moved to location',
+                    changes: `Status changed from 'New' to '${selectedLocation}'`
+                }
+            };
+            await addDoc(collection(db, eventsPath), eventData);
+            onClose();
+        } catch (error) {
+             console.error("Error updating location:", error);
+            alert("Failed to update location.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const handleMarkAsLoaded = async () => {
+        setIsSaving(true);
+        const containerRef = doc(db, containersPath, container.id.toUpperCase());
+        const newStatus = 'Loading COMPLETE';
+
+        try {
+            const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
+            await setDoc(containerRef, dataToUpdate, { merge: true });
+
+            const eventData = {
+                containerId: container.id.toUpperCase(),
+                timestamp: Timestamp.now(),
+                details: {
+                    action: 'Container loaded',
+                    changes: `Status changed from '${container.status}' to '${newStatus}'`
+                }
+            };
+            await addDoc(collection(db, eventsPath), eventData);
+            onClose();
+        } catch (error) {
+             console.error("Error marking as loaded:", error);
+            alert("Failed to mark as loaded.");
+        } finally {
+            setIsSaving(false);
+        }
     };
     
     const handleSubmit = async (e) => {
@@ -553,51 +616,28 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                 await setDoc(containerRef, dataToSave);
                 await addDoc(collection(db, eventsPath), eventData);
             } else {
-                // Logic for updating an existing container
-                if (container.status === 'New') {
-                    // Special update for 'New' containers to set location
-                    if (!selectedLocation) {
-                        alert("Please select a location.");
-                        setIsSaving(false);
-                        return;
+                 // Regular full form update
+                const changes = [];
+                for (const key in formData) {
+                    if (formData[key] !== container[key]) {
+                        changes.push(`${key} changed from '${container[key] || ''}' to '${formData[key]}'`);
                     }
-                    const dataToUpdate = { status: selectedLocation, lastUpdate: Timestamp.now() };
+                }
+                
+                if (changes.length > 0) {
+                    const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
+                    delete dataToUpdate.id; // The ID is the doc key, not a field
                     await setDoc(containerRef, dataToUpdate, { merge: true });
                     
                     const eventData = {
                         containerId: container.id.toUpperCase(),
                         timestamp: Timestamp.now(),
                         details: {
-                            action: 'Container moved to location',
-                            changes: `Status changed from 'New' to '${selectedLocation}'`
+                            action: 'Container updated',
+                            changes: changes.join('; ')
                         }
                     };
                     await addDoc(collection(db, eventsPath), eventData);
-
-                } else {
-                    // Regular full form update
-                    const changes = [];
-                    for (const key in formData) {
-                        if (formData[key] !== container[key]) {
-                            changes.push(`${key} changed from '${container[key] || ''}' to '${formData[key]}'`);
-                        }
-                    }
-                    
-                    if (changes.length > 0) {
-                        const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
-                        delete dataToUpdate.id; // The ID is the doc key, not a field
-                        await setDoc(containerRef, dataToUpdate, { merge: true });
-                        
-                        const eventData = {
-                            containerId: container.id.toUpperCase(),
-                            timestamp: Timestamp.now(),
-                            details: {
-                                action: 'Container updated',
-                                changes: changes.join('; ')
-                            }
-                        };
-                        await addDoc(collection(db, eventsPath), eventData);
-                    }
                 }
             }
             onClose();
@@ -712,6 +752,166 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
         return statuses;
     }, [formData.status]);
     
+    const renderContent = () => {
+        if (isNew) {
+            return (
+                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Booking # *</label>
+                        <select name="booking" value={formData.booking} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select a Booking --</option>
+                            {bookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
+                        </select>
+                    </div>
+                    {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
+                     <InputField label="Container #" name="id" value={formData.id} onChange={handleChange} required />
+                     <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight} onChange={handleChange} />
+                     <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                            {isSaving ? 'Saving...' : 'Add Container'}
+                        </button>
+                     </div>
+                </form>
+            );
+        }
+
+        if (container.status === 'New') {
+            return (
+                <form onSubmit={handleLocationSubmit} className="p-4 space-y-4">
+                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
+                    <div>
+                        <label htmlFor="location" className="block text-sm font-medium text-gray-300 mb-1">Move to Location *</label>
+                        <select
+                            id="location"
+                            name="location"
+                            value={selectedLocation}
+                            onChange={(e) => setSelectedLocation(e.target.value)}
+                            required
+                            className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">-- Select a Location --</option>
+                            {collections.locations.map(loc => (
+                                <option key={loc.docId} value={loc.location}>{loc.location}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                            {isSaving ? 'Saving...' : 'Update Location'}
+                        </button>
+                        </div>
+                </form>
+            );
+        }
+        
+        if (isAtLocation) {
+             return (
+                <div className="p-4 flex flex-col items-center justify-center">
+                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
+                    <InputField label="Current Location" name="status" value={container.status} disabled={true} />
+                    <div className="pt-6">
+                        <button 
+                            onClick={handleMarkAsLoaded} 
+                            disabled={isSaving}
+                            className="py-3 px-6 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-lg disabled:bg-green-800"
+                        >
+                            {isSaving ? 'Updating...' : 'Mark as Loaded'}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Default: Full edit form
+        return (
+            <div className="flex flex-col lg:flex-row">
+                <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
+                    <InputField label="Container #" name="id" value={formData.id} disabled={true} />
+                    <InputField label="Booking #" name="booking" value={formData.booking} disabled={true} />
+                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                        <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            {availableStatuses.map(s => <option key={s.label} value={s.label}>{s.emoji} {s.label}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Truck/Driver</label>
+                        <select name="truck" value={formData.truck} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select Driver --</option>
+                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Chassis</label>
+                        <select name="chassis" value={formData.chassis} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select Chassis --</option>
+                            {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
+                        </select>
+                    </div>
+                   
+                    <InputField label="Seal #" name="seal" value={formData.seal} onChange={handleChange} />
+                    
+                    <div className="flex gap-4">
+                        <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
+                        <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight} onChange={handleChange} />
+                    </div>
+
+                    <div className="flex flex-col gap-2 mt-2">
+                        <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
+                        <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={formData.hasHolesAfterSquish} onChange={handleChange} />
+                    </div>
+                    <div className="pt-4 flex justify-between items-center gap-3">
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirmOpen(true)}
+                                className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
+                            >
+                                Delete
+                            </button>
+                             <button
+                                type="button"
+                                onClick={handleUndo}
+                                disabled={events.length < 2}
+                                className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed"
+                            >
+                                Undo Last Update
+                            </button>
+                        </div>
+                        <div className="flex gap-3">
+                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                            <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                                {isSaving ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
+                    <h3 className="text-lg font-semibold mb-3">Event History</h3>
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        {events.length > 0 ? (
+                            events.map(event => (
+                                <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
+                                    <p className="font-bold text-gray-200">{event.details.action}</p>
+                                    {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
+                                    <p className="text-xs text-gray-500 text-right mt-1">{new Date(event.timestamp).toLocaleString()}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-gray-500">No events found for this container.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -721,136 +921,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                 </header>
                 
                 <div className="flex-grow overflow-y-auto">
-                    {isNew ? (
-                        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Booking # *</label>
-                                <select name="booking" value={formData.booking} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">-- Select a Booking --</option>
-                                    {bookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
-                                </select>
-                            </div>
-                            {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
-                             <InputField label="Container #" name="id" value={formData.id} onChange={handleChange} required />
-                             <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight} onChange={handleChange} />
-                             <div className="pt-4 flex justify-end gap-3">
-                                <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                                <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                                    {isSaving ? 'Saving...' : 'Add Container'}
-                                </button>
-                             </div>
-                        </form>
-                    ) : container.status === 'New' ? (
-                        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                            <InputField label="Container #" name="id" value={container.id} disabled={true} />
-                            <div>
-                                <label htmlFor="location" className="block text-sm font-medium text-gray-300 mb-1">Move to Location *</label>
-                                <select
-                                    id="location"
-                                    name="location"
-                                    value={selectedLocation}
-                                    onChange={(e) => setSelectedLocation(e.target.value)}
-                                    required
-                                    className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    <option value="">-- Select a Location --</option>
-                                    {collections.locations.map(loc => (
-                                        <option key={loc.docId} value={loc.location}>{loc.location}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="pt-4 flex justify-end gap-3">
-                                <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                                <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                                    {isSaving ? 'Saving...' : 'Update Location'}
-                                </button>
-                                </div>
-                        </form>
-                    ) : (
-                        <div className="flex flex-col lg:flex-row">
-                            <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
-                                <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                                <InputField label="Booking #" name="booking" value={formData.booking} disabled={true} />
-                                <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                                    <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        {availableStatuses.map(s => <option key={s.label} value={s.label}>{s.emoji} {s.label}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Truck/Driver</label>
-                                    <select name="truck" value={formData.truck} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option value="">-- Select Driver --</option>
-                                        {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Chassis</label>
-                                    <select name="chassis" value={formData.chassis} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        <option value="">-- Select Chassis --</option>
-                                        {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
-                                    </select>
-                                </div>
-                               
-                                <InputField label="Seal #" name="seal" value={formData.seal} onChange={handleChange} />
-                                
-                                <div className="flex gap-4">
-                                    <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
-                                    <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight} onChange={handleChange} />
-                                </div>
-
-                                <div className="flex flex-col gap-2 mt-2">
-                                    <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
-                                    <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={formData.hasHolesAfterSquish} onChange={handleChange} />
-                                </div>
-                                <div className="pt-4 flex justify-between items-center gap-3">
-                                    <div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setDeleteConfirmOpen(true)}
-                                            className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
-                                        >
-                                            Delete
-                                        </button>
-                                         <button
-                                            type="button"
-                                            onClick={handleUndo}
-                                            disabled={events.length < 2}
-                                            className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed"
-                                        >
-                                            Undo Last Update
-                                        </button>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                                            {isSaving ? 'Saving...' : 'Save Changes'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
-                            <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
-                                <h3 className="text-lg font-semibold mb-3">Event History</h3>
-                                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                                    {events.length > 0 ? (
-                                        events.map(event => (
-                                            <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
-                                                <p className="font-bold text-gray-200">{event.details.action}</p>
-                                                {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
-                                                <p className="text-xs text-gray-500 text-right mt-1">{new Date(event.timestamp).toLocaleString()}</p>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p className="text-gray-500">No events found for this container.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {renderContent()}
                 </div>
                  {isDeleteConfirmOpen && (
                     <ConfirmationModal
