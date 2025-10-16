@@ -61,47 +61,29 @@ const db = getFirestore(app);
 // --- Helper Components & Data ---
 
 const CONTAINER_STATUSES = [
-    { emoji: '🆕', label: 'New' },
-    { emoji: '🏞️', label: 'In Yard' },
-    { emoji: '🏢', label: 'On Floor' },
-    { emoji: '👨🏻‍🏭', label: 'Needs Welding' },
-    { emoji: '🤛🏻💨', label: 'Needs Squish' },
-    { emoji: '🤛🏻💨👨🏻‍🏭', label: 'Needs Squish & Welding' },
-    { emoji: '⚖️🤛🏻💨', label: 'Needs Weight & Squish' },
-    { emoji: '⚖️🤛🏻💨👨🏻‍🏭', label: 'Needs Weight, Squish & Welding' },
-    { emoji: '👨🏻‍🏭🏭', label: 'In Workshop' },
-    { emoji: '⚙️', label: 'In Shred Tilter' },
-    { emoji: '⚖️', label: 'In Scale Tilter' },
-    { emoji: '🛤️', label: 'In Track Tilter' },
-    { emoji: '🏗️', label: 'At Crane' },
-    { emoji: '⌛', label: 'Waiting (Office)' },
-    { emoji: '🔥', label: 'Busy (Needs Update)' },
-    { emoji: '👍🏻', label: 'Ready for Delivery' },
-    { emoji: '☑️', label: 'Loading Complete' },
-    { emoji: '🚛', label: 'En Route to Pier' },
-    { emoji: '💨', label: 'Returned Empty' },
-    { emoji: 'Y', label: 'Pier Accepted' },
-    { emoji: '🛞', label: 'Chassis Repair' },
-    { emoji: '📝', label: 'Docs Issue' },
-    { emoji: '☢️', label: 'Hazardous (Do Not Touch)' },
-];
-
-// Statuses available during the main update step
-const UPDATE_STATUSES = [
-    { emoji: '⌛', label: 'Loading COMPLETE' },
-    { emoji: '🔥', label: 'Parked and Waiting' },
-    { emoji: '🤛🏻💨', label: 'Needs Squish' },
-    { emoji: '🤛🏻💨👨🏻‍🏭', label: 'Needs Squish & Welding' },
-    { emoji: '👨🏻‍🏭', label: 'Needs Welding' },
-    { emoji: '👨🏻‍🏭🏭', label: 'In Workshop' },
-    { emoji: '⚖️🤛🏻💨', label: 'Needs Weight & Squish' },
-    { emoji: '⚖️🤛🏻💨👨🏻‍🏭', label: 'Needs Weight, Squish & Welding' },
-    { emoji: '🛞', label: 'Chassis Needs Repair' },
-    { emoji: '⌛', label: 'Waiting (Office)' },
-    { emoji: '👍🏻', label: 'Ready for Delivery' },
-    { emoji: '🏗️', label: 'At Crane' },
-    { emoji: '🚛', label: 'En Route to Pier' },
-    { emoji: '☢️', label: 'Nuclear (On Hold)' },
+    { emoji: '🆕', label: 'New', isUpdateOption: false },
+    { emoji: '🏞️', label: 'In Yard', isUpdateOption: false },
+    { emoji: '🏢', label: 'On Floor', isUpdateOption: false },
+    { emoji: '👨🏻‍🏭', label: 'Needs Welding', isUpdateOption: true },
+    { emoji: '🤛🏻💨', label: 'Needs Squish', isUpdateOption: true },
+    { emoji: '🤛🏻💨👨🏻‍🏭', label: 'Needs Squish & Welding', isUpdateOption: true },
+    { emoji: '⚖️🤛🏻💨', label: 'Needs Weight & Squish', isUpdateOption: true },
+    { emoji: '⚖️🤛🏻💨👨🏻‍🏭', label: 'Needs Weight, Squish & Welding', isUpdateOption: true },
+    { emoji: '👨🏻‍🏭🏭', label: 'In Workshop', isUpdateOption: true },
+    { emoji: '⚙️', label: 'In Shred Tilter', isUpdateOption: false },
+    { emoji: '⚖️', label: 'In Scale Tilter', isUpdateOption: false },
+    { emoji: '🛤️', label: 'In Track Tilter', isUpdateOption: false },
+    { emoji: '🏗️', label: 'At Crane', isUpdateOption: true },
+    { emoji: '⌛', label: 'Waiting (Office)', isUpdateOption: true },
+    { emoji: '🔥', label: 'Parked and Waiting', isUpdateOption: true },
+    { emoji: '👍🏻', label: 'Ready for Delivery', isUpdateOption: true },
+    { emoji: '☑️', label: 'Loading Complete', isUpdateOption: true },
+    { emoji: '🚛', label: 'En Route to Pier', isUpdateOption: true },
+    { emoji: '💨', label: 'Returned Empty', isUpdateOption: false },
+    { emoji: 'Y', label: 'Pier Accepted', isUpdateOption: false },
+    { emoji: '🛞', label: 'Chassis Needs Repair', isUpdateOption: true },
+    { emoji: '📝', label: 'Docs Issue', isUpdateOption: false },
+    { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true },
 ];
 
 
@@ -551,7 +533,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     const handleMarkAsLoaded = async () => {
         setIsSaving(true);
         const containerRef = doc(db, containersPath, container.id.toUpperCase());
-        const newStatus = 'Loading COMPLETE';
+        const newStatus = 'Loading Complete';
 
         try {
             const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
@@ -740,13 +722,14 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     }, [formData.booking, bookings, isNew]);
 
     const availableStatuses = useMemo(() => {
-        const statuses = [...UPDATE_STATUSES];
+        const statuses = CONTAINER_STATUSES.filter(s => s.isUpdateOption);
         const isCurrentStatusInList = statuses.some(s => s.label === formData.status);
         if (formData.status && !isCurrentStatusInList) {
             const masterStatus = CONTAINER_STATUSES.find(s => s.label === formData.status);
             statuses.unshift({ 
                 emoji: masterStatus?.emoji || '📍',
-                label: formData.status 
+                label: formData.status,
+                isUpdateOption: true
             });
         }
         return statuses;
