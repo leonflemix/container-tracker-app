@@ -131,6 +131,7 @@ export default function App() {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [view, setView] = useState('card'); // 'card' or 'grid'
 
     // --- Dynamically load Tailwind CSS ---
     useEffect(() => {
@@ -304,7 +305,7 @@ export default function App() {
                     </div>
                 </header>
 
-                <div className="mb-4">
+                <div className="mb-4 flex flex-col sm:flex-row gap-4">
                     <input
                         type="text"
                         placeholder="Search by Container #, Booking, Truck..."
@@ -312,16 +313,26 @@ export default function App() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full p-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                     <div className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-lg p-1 flex">
+                        <button onClick={() => setView('card')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'card' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Card</button>
+                        <button onClick={() => setView('grid')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Grid</button>
+                    </div>
                 </div>
 
                 {loading ? (
                     <div className="text-center py-10">Loading containers...</div>
-                ) : (
+                ) : view === 'card' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredContainers.map((container) => (
                             <ContainerCard key={container.id} container={container} onSelect={handleOpenModal} />
                         ))}
                     </div>
+                ) : (
+                    <GridContainerView 
+                        containers={filteredContainers}
+                        collections={collectionsData}
+                        onEdit={handleOpenModal}
+                    />
                 )}
             </div>
 
@@ -378,6 +389,50 @@ const ContainerCard = ({ container, onSelect }) => {
         </div>
     );
 };
+
+// Grid View Component
+const GridContainerView = ({ containers, collections, onEdit }) => {
+    return (
+        <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
+            <table className="min-w-full text-sm text-left text-gray-300">
+                <thead className="bg-gray-700 text-xs text-gray-400 uppercase tracking-wider">
+                    <tr>
+                        <th scope="col" className="px-6 py-3">Container #</th>
+                        <th scope="col" className="px-6 py-3">Status</th>
+                        <th scope="col" className="px-6 py-3">Booking #</th>
+                        <th scope="col" className="px-6 py-3">Type</th>
+                        <th scope="col" className="px-6 py-3">Truck/Driver</th>
+                        <th scope="col" className="px-6 py-3">Chassis</th>
+                        <th scope="col" className="px-6 py-3">Seal #</th>
+                        <th scope="col" className="px-6 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700">
+                    {containers.map(container => {
+                        const statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status) || { emoji: '📍', label: container.status };
+                        return (
+                            <tr key={container.id} className="hover:bg-gray-700">
+                                <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{container.id}</td>
+                                <td className="px-6 py-4 whitespace-nowrap"><span className="mr-2">{statusInfo.emoji}</span>{statusInfo.label}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{container.booking || 'N/A'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{container.bookedFor || 'N/A'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{container.truck || 'N/A'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{container.chassis || 'N/A'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{container.seal || 'N/A'}</td>
+                                <td className="px-6 py-4">
+                                    <button onClick={() => onEdit(container)} className="text-blue-400 hover:text-blue-300 font-semibold">
+                                        Edit
+                                    </button>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
 
 // Modal for Adding a Booking
 const BookingModal = ({ onClose, bookingsPath, containerTypes }) => {
