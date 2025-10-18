@@ -84,6 +84,7 @@ const CONTAINER_STATUSES = [
     { emoji: '🛞', label: 'CHASSIS NEEDS REPAIR', isUpdateOption: true, isDispatchOption: true },
     { emoji: '📝', label: 'Docs Issue', isUpdateOption: false, isDispatchOption: false },
     { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true, isDispatchOption: false },
+    { emoji: '👨‍✈️', label: 'Assigned to Driver', isUpdateOption: false, isDispatchOption: false }, // Dynamic label handled in code
 ];
 
 
@@ -372,7 +373,13 @@ export default function App() {
 
 // Card component for displaying a single container
 const ContainerCard = ({ container, onSelect }) => {
-    const statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status) || { emoji: '📍', label: container.status };
+    let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
+    if (container.status.startsWith('Assigned to Driver')) {
+        statusInfo = { emoji: '👨‍✈️', label: container.status };
+    }
+    if (!statusInfo) {
+        statusInfo = { emoji: '📍', label: container.status };
+    }
     
     return (
         <div 
@@ -414,7 +421,13 @@ const GridContainerView = ({ containers, collections, onEdit }) => {
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                     {containers.map(container => {
-                        const statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status) || { emoji: '📍', label: container.status };
+                        let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
+                        if (container.status.startsWith('Assigned to Driver')) {
+                            statusInfo = { emoji: '👨‍✈️', label: container.status };
+                        }
+                        if (!statusInfo) {
+                            statusInfo = { emoji: '📍', label: container.status };
+                        }
                         return (
                             <tr key={container.id} className="hover:bg-gray-700">
                                 <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{container.id}</td>
@@ -534,6 +547,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
             id: container?.id || '',
             status: container?.status || 'New',
             truck: container?.truck || '',
+            deliveryDriver: container?.deliveryDriver || '',
             grossWeight: container?.grossWeight || 0,
             chassis: container?.chassis || '',
             tareWeight: container?.tareWeight || 0,
@@ -547,6 +561,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     
     const [isSaving, setIsSaving] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState('');
+    const [selectedDriver, setSelectedDriver] = useState('');
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
     const isAtLocation = useMemo(() => {
@@ -617,6 +632,42 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
         }
     };
     
+    const handleAssignDriver = async (e) => {
+        e.preventDefault();
+        if (!selectedDriver) {
+            alert("Please select a driver to assign.");
+            return;
+        }
+        setIsSaving(true);
+        const containerRef = doc(db, containersPath, container.id.toUpperCase());
+        const newStatus = `Assigned to Driver - ${selectedDriver}`;
+
+        try {
+            const dataToUpdate = { 
+                status: newStatus, 
+                deliveryDriver: selectedDriver,
+                lastUpdate: Timestamp.now() 
+            };
+            await setDoc(containerRef, dataToUpdate, { merge: true });
+
+            const eventData = {
+                containerId: container.id.toUpperCase(),
+                timestamp: Timestamp.now(),
+                details: {
+                    action: 'Assigned to delivery driver',
+                    changes: `Status changed from '${container.status}' to '${newStatus}'`
+                }
+            };
+            await addDoc(collection(db, eventsPath), eventData);
+            onClose();
+        } catch (error) {
+            console.error("Error assigning driver:", error);
+            alert("Failed to assign driver.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         const containerId = (isNew ? formData.id : container.id);
@@ -652,6 +703,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                     status: 'New',
                     lastUpdate: Timestamp.now(),
                     truck: '',
+                    deliveryDriver: '',
                     grossWeight: 0,
                     chassis: '',
                     tareWeight: formData.tareWeight || 0,
@@ -877,7 +929,55 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
             );
         }
         
-        // Final stage: Dispatch form for 'Loading Complete' and any subsequent statuses
+        if (container.status === 'ALL GOOD, BOOK FOR DELIVERY') {
+            return (
+                <form onSubmit={handleAssignDriver} className="p-4 space-y-4">
+                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
+                    <div>
+                        <label htmlFor="deliveryDriver" className="block text-sm font-medium text-gray-300 mb-1">Assign Delivery Truck/Driver *</label>
+                        <select
+                            id="deliveryDriver"
+                            name="deliveryDriver"
+                            value={selectedDriver}
+                            onChange={(e) => setSelectedDriver(e.target.value)}
+                            required
+                            className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">-- Select Driver --</option>
+                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
+                        </select>
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                            {isSaving ? 'Saving...' : 'Assign Driver'}
+                        </button>
+                    </div>
+                </form>
+            );
+        }
+
+        if (container.status.startsWith('Assigned to Driver')) {
+            const driver = collections.drivers.find(d => d.name === container.deliveryDriver);
+            return (
+                <div className="p-4 space-y-3">
+                    <h3 className="text-lg font-semibold text-center">{container.status}</h3>
+                    <InputField label="Container #" value={container.id} disabled />
+                    <InputField label="Booking #" value={container.booking} disabled />
+                    {driver && (
+                        <>
+                            <InputField label="Driver ID" value={driver.id} disabled />
+                            <InputField label="Plate" value={driver.plate} disabled />
+                        </>
+                    )}
+                     <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
+                     </div>
+                </div>
+            );
+        }
+
+        // Default: Full edit form for other statuses
         return (
             <div className="flex flex-col lg:flex-row">
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
