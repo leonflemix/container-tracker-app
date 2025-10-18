@@ -655,7 +655,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                 timestamp: Timestamp.now(),
                 details: {
                     action: 'Assigned to delivery driver',
-                    changes: `Status changed from '${container.status}' to '${newStatus}'`
+                    changes: `Status changed from '${container.status}' to '${newStatus}'; deliveryDriver changed from '${container.deliveryDriver || ''}' to '${selectedDriver}'`
                 }
             };
             await addDoc(collection(db, eventsPath), eventData);
@@ -773,64 +773,61 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     };
 
     const handleUndo = async () => {
-        if (!container || events.length < 2) {
+        if (!container || events.length < 1) { // Need at least one event to undo
             alert("Cannot undo. No previous state found.");
             return;
         }
+        const lastEvent = events[0];
 
-        const lastEvent = events[0]; // Most recent event
-        const previousEvent = events[1]; // The state to revert to
+        // The very first "created" event can't be undone this way.
+        if (lastEvent.details.action.startsWith('Container created') || !lastEvent.details.changes) {
+            alert("Cannot undo the creation of a container. Please delete it instead.");
+            return;
+        }
+        
+        setIsSaving(true);
 
         try {
             const containerRef = doc(db, containersPath, container.id);
-
-            // Reconstruct the previous state from the event before the last one
-            const changesToRevert = previousEvent.details.changes?.split('; ') || [];
+            const changesToRevert = lastEvent.details.changes.split('; ');
             
-            // Start with current container data and revert it
-            let previousState = { ...container };
-            // The very first event does not have changes, so we find its details.
-            // All subsequent events have changes.
-            if(previousEvent.details.changes){
-                 // We apply the changes from the previous state to get back to it.
-                 changesToRevert.forEach(change => {
-                    const match = change.match(/(.+) changed from '(.+)' to '(.+)'/);
-                    if (match) {
-                        const [, key, fromValue, ] = match;
-                        
-                        let revertedValue = fromValue;
-                        if (typeof container[key] === 'boolean') {
-                             revertedValue = (fromValue === 'true');
-                        } else if (typeof container[key] === 'number') {
-                             revertedValue = parseFloat(fromValue);
+            let stateToRestore = { ...container };
+
+            changesToRevert.forEach(change => {
+                const match = change.match(/(.+) changed from '(.*)' to '(.*)'/); // Use .* to capture empty strings
+                if (match) {
+                    const [, key, fromValue] = match;
+                    
+                    if (key in stateToRestore) {
+                        const originalType = typeof stateToRestore[key];
+                        if (originalType === 'boolean') {
+                            stateToRestore[key] = (fromValue === 'true');
+                        } else if (originalType === 'number') {
+                            stateToRestore[key] = parseFloat(fromValue) || 0;
+                        } else {
+                            stateToRestore[key] = fromValue;
                         }
-                        
-                        previousState[key] = revertedValue;
                     }
-                });
-            } else {
-                 previousState = {
-                     ...previousState,
-                     status: 'New',
-                 };
-            }
+                }
+            });
 
-            // The state we are reverting to needs to have its timestamp updated
-            previousState.lastUpdate = Timestamp.now();
-            delete previousState.id;
+            stateToRestore.lastUpdate = Timestamp.now();
+            delete stateToRestore.id;
+
+            // Perform the update and delete in a batch for atomicity
+            const batch = writeBatch(db);
+            batch.set(containerRef, stateToRestore);
+            batch.delete(doc(db, eventsPath, lastEvent.id));
+            await batch.commit();
             
-            // Update the container with the reconstructed previous state
-            await setDoc(containerRef, previousState);
-
-            // Delete the last event that we are undoing
-            await deleteDoc(doc(db, eventsPath, lastEvent.id));
-
             alert("Last update has been successfully undone.");
             onClose();
 
         } catch (error) {
             console.error("Error undoing last update:", error);
             alert("Failed to undo last update. See console for details.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
