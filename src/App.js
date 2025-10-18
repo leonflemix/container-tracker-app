@@ -867,96 +867,11 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
             );
         }
         
-        if (container.status === 'Loading Complete') {
-            return (
-                <div className="flex flex-col lg:flex-row">
-                    <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
-                        <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                        <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                            <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                {availableStatuses.map(s => <option key={s.label} value={s.label}>{s.emoji} {s.label}</option>)}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Truck/Driver</label>
-                            <select name="truck" value={formData.truck} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="">-- Select Driver --</option>
-                                {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Chassis</label>
-                            <select name="chassis" value={formData.chassis} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="">-- Select Chassis --</option>
-                                {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
-                            </select>
-                        </div>
-                       
-                        <InputField label="Seal #" name="seal" value={formData.seal} onChange={handleChange} />
-                        
-                        <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
-
-                        <div className="flex flex-col gap-2 mt-2">
-                            <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
-                            <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={formData.hasHolesAfterSquish} onChange={handleChange} />
-                        </div>
-                        <div className="pt-4 flex justify-between items-center gap-3">
-                            <div>
-                                <button
-                                    type="button"
-                                    onClick={() => setDeleteConfirmOpen(true)}
-                                    className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
-                                >
-                                    Delete
-                                </button>
-                                 <button
-                                    type="button"
-                                    onClick={handleUndo}
-                                    disabled={events.length < 2}
-                                    className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed"
-                                >
-                                    Undo Last Update
-                                </button>
-                            </div>
-                            <div className="flex gap-3">
-                                <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                                <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                                    {isSaving ? 'Saving...' : 'Save Changes'}
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                    <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
-                        <h3 className="text-lg font-semibold mb-3">Event History</h3>
-                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                            {events.length > 0 ? (
-                                events.map(event => (
-                                    <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
-                                        <p className="font-bold text-gray-200">{event.details.action}</p>
-                                        {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
-                                        <p className="text-xs text-gray-500 text-right mt-1">{new Date(event.timestamp).toLocaleString()}</p>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-gray-500">No events found for this container.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // Default: Full edit form
+        // Final stage: Dispatch form for 'Loading Complete' and any subsequent statuses
         return (
             <div className="flex flex-col lg:flex-row">
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
                     <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                    <InputField label="Booking #" name="booking" value={formData.booking} disabled={true} />
                     <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
                     
                     <div>
@@ -984,10 +899,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
                    
                     <InputField label="Seal #" name="seal" value={formData.seal} onChange={handleChange} />
                     
-                    <div className="flex gap-4">
-                        <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
-                        <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight} onChange={handleChange} />
-                    </div>
+                    <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
 
                     <div className="flex flex-col gap-2 mt-2">
                         <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
