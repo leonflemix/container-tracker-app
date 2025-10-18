@@ -61,29 +61,29 @@ const db = getFirestore(app);
 // --- Helper Components & Data ---
 
 const CONTAINER_STATUSES = [
-    { emoji: '🆕', label: 'New', isUpdateOption: false },
-    { emoji: '🏞️', label: 'In Yard', isUpdateOption: false },
-    { emoji: '🏢', label: 'On Floor', isUpdateOption: false },
-    { emoji: '👨🏻‍🏭', label: 'Needs Welding', isUpdateOption: true },
-    { emoji: '🤛🏻💨', label: 'Needs Squish', isUpdateOption: true },
-    { emoji: '🤛🏻💨👨🏻‍🏭', label: 'Needs Squish & Welding', isUpdateOption: true },
-    { emoji: '⚖️🤛🏻💨', label: 'Needs Weight & Squish', isUpdateOption: true },
-    { emoji: '⚖️🤛🏻💨👨🏻‍🏭', label: 'Needs Weight, Squish & Welding', isUpdateOption: true },
-    { emoji: '👨🏻‍🏭🏭', label: 'In Workshop', isUpdateOption: true },
-    { emoji: '⚙️', label: 'In Shred Tilter', isUpdateOption: false },
-    { emoji: '⚖️', label: 'In Scale Tilter', isUpdateOption: false },
-    { emoji: '🛤️', label: 'In Track Tilter', isUpdateOption: false },
-    { emoji: '🏗️', label: 'At Crane', isUpdateOption: true },
-    { emoji: '⌛', label: 'Waiting (Office)', isUpdateOption: true },
-    { emoji: '🔥', label: 'Parked and Waiting', isUpdateOption: true },
-    { emoji: '👍🏻', label: 'Ready for Delivery', isUpdateOption: true },
-    { emoji: '☑️', label: 'Loading Complete', isUpdateOption: true },
-    { emoji: '🚛', label: 'En Route to Pier', isUpdateOption: true },
-    { emoji: '💨', label: 'Returned Empty', isUpdateOption: false },
-    { emoji: 'Y', label: 'Pier Accepted', isUpdateOption: false },
-    { emoji: '🛞', label: 'Chassis Needs Repair', isUpdateOption: true },
-    { emoji: '📝', label: 'Docs Issue', isUpdateOption: false },
-    { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true },
+    { emoji: '🆕', label: 'New', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🏞️', label: 'In Yard', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🏢', label: 'On Floor', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '👨🏻‍🏭', label: 'NEEDS WELDING', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '🤛🏻💨', label: 'NEED SQUISH', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '🤛🏻💨👨🏻‍🏭', label: 'NEED SQUISH AND WELDING', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '⚖️🤛🏻💨', label: 'NEEDS WEIGHT AND SQUISH', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '⚖️🤛🏻💨👨🏻‍🏭', label: 'NEEDS EVERYTHING', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '👨🏻‍🏭🏭', label: 'IN WORKSHOP', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '⚙️', label: 'In Shred Tilter', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '⚖️', label: 'In Scale Tilter', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🛤️', label: 'In Track Tilter', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🏗️', label: 'At Crane', isUpdateOption: true, isDispatchOption: false },
+    { emoji: '⌛', label: 'WAIT FOR UPDATE FROM OFFICE', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '🔥', label: 'Busy PARKED AND WAITING', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '👍🏻', label: 'ALL GOOD, BOOK FOR DELIVERY', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '☑️', label: 'Loading Complete', isUpdateOption: true, isDispatchOption: false },
+    { emoji: '🚛', label: 'En Route to Pier', isUpdateOption: true, isDispatchOption: false },
+    { emoji: '💨', label: 'Returned Empty', isUpdateOption: false, isDispatchOption: false },
+    { emoji: 'Y', label: 'Pier Accepted', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🛞', label: 'CHASSIS NEEDS REPAIR', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '📝', label: 'Docs Issue', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true, isDispatchOption: false },
 ];
 
 
@@ -782,14 +782,16 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     }, [formData.booking, bookings, isNew]);
 
     const availableStatuses = useMemo(() => {
-        const statuses = CONTAINER_STATUSES.filter(s => s.isUpdateOption);
+        // For the dispatch form, we only show statuses marked as dispatch options.
+        const statuses = CONTAINER_STATUSES.filter(s => s.isDispatchOption);
+        
+        // Always include the container's current status in the list, even if it's not a standard dispatch option.
         const isCurrentStatusInList = statuses.some(s => s.label === formData.status);
         if (formData.status && !isCurrentStatusInList) {
-            const masterStatus = CONTAINER_STATUSES.find(s => s.label === formData.status);
+            const currentStatusInfo = CONTAINER_STATUSES.find(s => s.label === formData.status) || { emoji: '📍', label: formData.status };
             statuses.unshift({ 
-                emoji: masterStatus?.emoji || '📍',
-                label: formData.status,
-                isUpdateOption: true
+                ...currentStatusInfo, // Carry over all properties like emoji, label
+                isDispatchOption: true // Ensure it's treated as a selectable option here
             });
         }
         return statuses;
