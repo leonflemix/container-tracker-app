@@ -131,7 +131,12 @@ export default function App() {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [view, setView] = useState('card'); // 'card' or 'grid'
+    const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
+
+    // --- Save view preference ---
+    useEffect(() => {
+        localStorage.setItem('containerTrackerView', view);
+    }, [view]);
 
     // --- Dynamically load Tailwind CSS ---
     useEffect(() => {
