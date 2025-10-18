@@ -624,6 +624,14 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
             alert("Container number is required.");
             return;
         }
+
+        if (formData.status === 'ALL GOOD, BOOK FOR DELIVERY') {
+            if (!formData.truck || !formData.chassis || !formData.seal || !formData.grossWeight) {
+                alert("Please fill in Truck/Driver, Chassis, Seal #, and Gross Weight before booking for delivery.");
+                return;
+            }
+        }
+
         setIsSaving(true);
         
         const containerRef = doc(db, containersPath, containerId.toUpperCase());
