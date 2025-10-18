@@ -81,6 +81,7 @@ const CONTAINER_STATUSES = [
     { emoji: '🚛', label: 'En Route to Pier', isUpdateOption: true, isDispatchOption: false },
     { emoji: '💨', label: 'Returned Empty', isUpdateOption: false, isDispatchOption: false },
     { emoji: 'Y', label: 'Pier Accepted', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🚫', label: 'Denied', isUpdateOption: false, isDispatchOption: false },
     { emoji: '🛞', label: 'CHASSIS NEEDS REPAIR', isUpdateOption: true, isDispatchOption: true },
     { emoji: '📝', label: 'Docs Issue', isUpdateOption: false, isDispatchOption: false },
     { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true, isDispatchOption: false },
@@ -155,6 +156,7 @@ export default function App() {
     const appId = isCanvasEnv ? window.__app_id : 'container-tracker-app';
 
     const containersPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/containers` : 'containers', [appId, isCanvasEnv]);
+    const archivePath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/archive` : 'archive', [appId, isCanvasEnv]);
     const eventsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/events` : 'events', [appId, isCanvasEnv]);
     const bookingsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/bookings` : 'bookings', [appId, isCanvasEnv]);
     const collectionsPaths = useMemo(() => ({
@@ -351,6 +353,7 @@ export default function App() {
                     collections={collectionsData}
                     containersPath={containersPath}
                     eventsPath={eventsPath}
+                    archivePath={archivePath}
                 />
             )}
             {isBookingModalOpen && (
@@ -538,7 +541,7 @@ const BookingModal = ({ onClose, bookingsPath, containerTypes }) => {
 
 
 // Modal for Adding/Editing a container
-const ContainerModal = ({ container, events, onClose, bookings, collections, containersPath, eventsPath }) => {
+const ContainerModal = ({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath }) => {
     const isNew = !container;
     const [formData, setFormData] = useState(
         isNew 
@@ -833,37 +836,44 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
 
     const handlePierResponse = async (isAccepted) => {
         setIsSaving(true);
+        const batch = writeBatch(db);
         const containerRef = doc(db, containersPath, container.id);
-        
-        let newStatus = '';
-        let eventAction = '';
-        let eventChanges = '';
-        let dataToUpdate = {};
-
-        if (isAccepted) {
-            newStatus = 'Pier Accepted';
-            eventAction = 'Pier Accepted';
-            eventChanges = `Status changed from '${container.status}' to '${newStatus}'`;
-            dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
-        } else { // Denied
-            newStatus = 'ALL GOOD, BOOK FOR DELIVERY';
-            eventAction = 'Pier Denied';
-            eventChanges = `Status reverted from '${container.status}' to '${newStatus}'. Driver unassigned.`;
-            dataToUpdate = { status: newStatus, deliveryDriver: '', lastUpdate: Timestamp.now() };
-        }
 
         try {
-             await setDoc(containerRef, dataToUpdate, { merge: true });
+            if (isAccepted) {
+                const archiveRef = doc(db, archivePath, container.id);
+                const archivedData = { ...container, status: 'Pier Accepted', archivedAt: Timestamp.now() };
+                
+                batch.set(archiveRef, archivedData);
+                batch.delete(containerRef);
 
-            const eventData = {
-                containerId: container.id.toUpperCase(),
-                timestamp: Timestamp.now(),
-                details: {
-                    action: eventAction,
-                    changes: eventChanges
-                }
-            };
-            await addDoc(collection(db, eventsPath), eventData);
+                const eventData = {
+                    containerId: container.id.toUpperCase(),
+                    timestamp: Timestamp.now(),
+                    details: {
+                        action: 'Pier Accepted & Archived',
+                        changes: `Status changed from '${container.status}' to 'Pier Accepted'. Container moved to archive.`
+                    }
+                };
+                batch.set(doc(collection(db, eventsPath)), eventData);
+
+            } else { // Denied
+                const newStatus = 'Denied';
+                const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
+                batch.update(containerRef, dataToUpdate);
+
+                const eventData = {
+                    containerId: container.id.toUpperCase(),
+                    timestamp: Timestamp.now(),
+                    details: {
+                        action: 'Pier Denied',
+                        changes: `Status changed from '${container.status}' to '${newStatus}'.`
+                    }
+                };
+                batch.set(doc(collection(db, eventsPath)), eventData);
+            }
+            
+            await batch.commit();
             onClose();
         } catch (error) {
             console.error(`Error updating pier status:`, error);
@@ -872,6 +882,7 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
             setIsSaving(false);
         }
     };
+
 
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) {
