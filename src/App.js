@@ -831,6 +831,48 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
         }
     };
 
+    const handlePierResponse = async (isAccepted) => {
+        setIsSaving(true);
+        const containerRef = doc(db, containersPath, container.id);
+        
+        let newStatus = '';
+        let eventAction = '';
+        let eventChanges = '';
+        let dataToUpdate = {};
+
+        if (isAccepted) {
+            newStatus = 'Pier Accepted';
+            eventAction = 'Pier Accepted';
+            eventChanges = `Status changed from '${container.status}' to '${newStatus}'`;
+            dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
+        } else { // Denied
+            newStatus = 'ALL GOOD, BOOK FOR DELIVERY';
+            eventAction = 'Pier Denied';
+            eventChanges = `Status reverted from '${container.status}' to '${newStatus}'. Driver unassigned.`;
+            dataToUpdate = { status: newStatus, deliveryDriver: '', lastUpdate: Timestamp.now() };
+        }
+
+        try {
+             await setDoc(containerRef, dataToUpdate, { merge: true });
+
+            const eventData = {
+                containerId: container.id.toUpperCase(),
+                timestamp: Timestamp.now(),
+                details: {
+                    action: eventAction,
+                    changes: eventChanges
+                }
+            };
+            await addDoc(collection(db, eventsPath), eventData);
+            onClose();
+        } catch (error) {
+            console.error(`Error updating pier status:`, error);
+            alert("Failed to update pier status.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) {
             return bookings.find(b => b.id === formData.booking)?.type || null;
@@ -957,19 +999,29 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
         if (container.status.startsWith('Assigned to Driver')) {
             const driver = collections.drivers.find(d => d.name === container.deliveryDriver);
             return (
-                <div className="p-4 space-y-3">
-                    <h3 className="text-lg font-semibold text-center">{container.status}</h3>
-                    <InputField label="Container #" value={container.id} disabled />
-                    <InputField label="Booking #" value={container.booking} disabled />
-                    {driver && (
-                        <>
-                            <InputField label="Driver ID" value={driver.id} disabled />
-                            <InputField label="Plate" value={driver.plate} disabled />
-                        </>
-                    )}
-                     <div className="pt-4 flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
-                     </div>
+                <div className="p-6">
+                    <div className="space-y-3 mb-6">
+                        <h3 className="text-lg font-semibold text-center">{container.status}</h3>
+                        <InputField label="Container #" value={container.id} disabled />
+                        <InputField label="Booking #" value={container.booking} disabled />
+                        {driver && (
+                            <>
+                                <InputField label="Driver ID" value={driver.id} disabled />
+                                <InputField label="Plate" value={driver.plate} disabled />
+                            </>
+                        )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                         <div>
+                            <button onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-800 hover:bg-red-700 rounded-lg text-sm">Delete</button>
+                            <button onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo</button>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => handlePierResponse(false)} disabled={isSaving} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg">Denied</button>
+                            <button onClick={() => handlePierResponse(true)} disabled={isSaving} className="py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg">Accepted</button>
+                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
+                        </div>
+                    </div>
                 </div>
             );
         }
