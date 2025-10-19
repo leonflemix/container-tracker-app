@@ -945,19 +945,35 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     const renderContent = () => {
         if(isArchived){
              return (
-                <div className="p-6">
-                    <div className="space-y-3 mb-6">
-                        <h3 className="text-lg font-semibold text-center">Archived Container Details</h3>
+                <div className="flex flex-col lg:flex-row">
+                    <div className="p-4 lg:w-1/2 space-y-3">
+                        <h3 className="text-lg font-semibold text-center mb-4">Archived Container Details</h3>
                         {Object.entries(container).map(([key, value]) => {
                            if (typeof value !== 'object' || value === null) {
                                 return <InputField key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={String(value)} disabled />
                            }
                            return null;
                         })}
+                         <div className="pt-4 flex justify-end gap-3">
+                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
+                         </div>
                     </div>
-                     <div className="flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
-                     </div>
+                     <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
+                        <h3 className="text-lg font-semibold mb-3">Event History</h3>
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                            {events.length > 0 ? (
+                                events.map(event => (
+                                    <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
+                                        <p className="font-bold text-gray-200">{event.details.action}</p>
+                                        {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
+                                        <p className="text-xs text-gray-500 text-right mt-1">{new Date(event.timestamp).toLocaleString()}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-500">No events found for this container.</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )
         }
