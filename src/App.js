@@ -118,6 +118,10 @@ const ArchiveIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M10 12h4"/><path d="M22 3H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/></svg>
 );
 
+const ChartIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+);
+
 
 // Main App Component
 export default function App() {
@@ -138,7 +142,7 @@ export default function App() {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pageView, setPageView] = useState('live'); // 'live' or 'archive'
+    const [pageView, setPageView] = useState('live'); // 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
 
     // --- Save view preference ---
@@ -305,6 +309,46 @@ export default function App() {
         );
     }, [containers, archivedContainers, searchTerm, pageView]);
 
+    const renderMainContent = () => {
+        if (pageView === 'reports') {
+            return <ReportsPage archivePath={archivePath} collections={collectionsData} />;
+        }
+        
+        return (
+            <>
+                <div className="mb-4 flex flex-col sm:flex-row gap-4">
+                    <input
+                        type="text"
+                        placeholder="Search by Container #, Booking, Truck..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full p-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                     <div className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-lg p-1 flex">
+                        <button onClick={() => setView('card')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'card' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Card</button>
+                        <button onClick={() => setView('grid')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Grid</button>
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div className="text-center py-10">Loading...</div>
+                ) : view === 'card' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {filteredContainers.map((container) => (
+                            <ContainerCard key={container.id} container={container} onSelect={handleOpenModal} isArchived={pageView === 'archive'}/>
+                        ))}
+                    </div>
+                ) : (
+                    <GridContainerView 
+                        containers={filteredContainers}
+                        collections={collectionsData}
+                        onEdit={handleOpenModal}
+                        isArchived={pageView === 'archive'}
+                    />
+                )}
+            </>
+        )
+    }
 
     return (
         <div className="bg-gray-900 text-gray-100 min-h-screen font-sans">
@@ -312,7 +356,11 @@ export default function App() {
                 <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
                     <div className="flex items-center mb-4 sm:mb-0">
                          <TruckIcon />
-                         <h1 className="text-2xl font-bold text-white">{pageView === 'live' ? 'Container Yard Tracker' : 'Archived Containers'}</h1>
+                         <h1 className="text-2xl font-bold text-white">
+                            {pageView === 'live' && 'Container Yard Tracker'}
+                            {pageView === 'archive' && 'Archived Containers'}
+                            {pageView === 'reports' && 'Reports'}
+                        </h1>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <button
@@ -320,7 +368,14 @@ export default function App() {
                             className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
                             <ArchiveIcon />
-                            {pageView === 'live' ? 'View Archive' : 'View Live Yard'}
+                            {pageView === 'archive' ? 'View Live Yard' : 'View Archive'}
+                        </button>
+                        <button
+                            onClick={() => setPageView('reports')}
+                            className="flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <ChartIcon />
+                            Reports
                         </button>
                         <button
                             onClick={() => setIsCollectionsModalOpen(true)}
@@ -345,37 +400,7 @@ export default function App() {
                         </button>
                     </div>
                 </header>
-
-                <div className="mb-4 flex flex-col sm:flex-row gap-4">
-                    <input
-                        type="text"
-                        placeholder="Search by Container #, Booking, Truck..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full p-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                     <div className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-lg p-1 flex">
-                        <button onClick={() => setView('card')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'card' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Card</button>
-                        <button onClick={() => setView('grid')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Grid</button>
-                    </div>
-                </div>
-
-                {loading ? (
-                    <div className="text-center py-10">Loading containers...</div>
-                ) : view === 'card' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredContainers.map((container) => (
-                            <ContainerCard key={container.id} container={container} onSelect={handleOpenModal} isArchived={pageView === 'archive'}/>
-                        ))}
-                    </div>
-                ) : (
-                    <GridContainerView 
-                        containers={filteredContainers}
-                        collections={collectionsData}
-                        onEdit={handleOpenModal}
-                        isArchived={pageView === 'archive'}
-                    />
-                )}
+                {renderMainContent()}
             </div>
 
             {isModalOpen && (
@@ -409,7 +434,120 @@ export default function App() {
     );
 }
 
-// Card component for displaying a single container
+// ... (Rest of the components: ContainerCard, GridContainerView, BookingModal remain the same)
+// ... (ContainerModal and other modals also remain the same)
+// ... (I'm adding the new ReportsPage component below, and will paste the other components after)
+
+const ReportsPage = ({ archivePath, collections }) => {
+    const [reportType, setReportType] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [selectedDriver, setSelectedDriver] = useState('');
+    const [result, setResult] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleGenerateReport = async () => {
+        if (!reportType) {
+            alert('Please select a report type.');
+            return;
+        }
+
+        setIsLoading(true);
+        setResult(null);
+
+        try {
+            if (reportType === 'shippedByDate') {
+                if (!startDate || !endDate) {
+                    alert('Please select a start and end date.');
+                    setIsLoading(false);
+                    return;
+                }
+                const start = Timestamp.fromDate(new Date(startDate));
+                const end = Timestamp.fromDate(new Date(endDate));
+                const q = query(collection(db, archivePath), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
+                const querySnapshot = await getDocs(q);
+                setResult(`Found ${querySnapshot.size} shipped containers in this period.`);
+            } else if (reportType === 'holesBefore') {
+                const q = query(collection(db, archivePath), where('hasHolesBeforeSquish', '==', true));
+                const querySnapshot = await getDocs(q);
+                setResult(`Found ${querySnapshot.size} containers with holes before squishing.`);
+            } else if (reportType === 'holesAfterOnly') {
+                const q = query(collection(db, archivePath), where('hasHolesBeforeSquish', '==', false), where('hasHolesAfterSquish', '==', true));
+                const querySnapshot = await getDocs(q);
+                setResult(`Found ${querySnapshot.size} containers with holes only after squishing.`);
+            } else if (reportType === 'byDriver') {
+                if (!selectedDriver || !startDate || !endDate) {
+                    alert('Please select a driver and a date range.');
+                    setIsLoading(false);
+                    return;
+                }
+                 const start = Timestamp.fromDate(new Date(startDate));
+                const end = Timestamp.fromDate(new Date(endDate));
+                const q = query(collection(db, archivePath), where('deliveryDriver', '==', selectedDriver), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
+                const querySnapshot = await getDocs(q);
+                setResult(`Found ${querySnapshot.size} containers delivered by ${selectedDriver} in this period.`);
+            }
+        } catch (error) {
+            console.error("Error generating report:", error);
+            setResult('Error generating report. See console for details.');
+        }
+
+        setIsLoading(false);
+    };
+
+    return (
+        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <h2 className="text-xl font-bold mb-4">Generate a Report</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Report Type</label>
+                    <select value={reportType} onChange={(e) => setReportType(e.target.value)} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Select Report --</option>
+                        <option value="shippedByDate">Containers Shipped by Date</option>
+                        <option value="holesBefore">Containers with Holes Before Squish</option>
+                        <option value="holesAfterOnly">Containers with Holes Only After Squish</option>
+                        <option value="byDriver">Containers Delivered by Driver</option>
+                    </select>
+                </div>
+
+                {(reportType === 'shippedByDate' || reportType === 'byDriver') && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputField label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                        <InputField label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                    </div>
+                )}
+                
+                {reportType === 'byDriver' && (
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Driver</label>
+                        <select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select Driver --</option>
+                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name}</option>)}
+                        </select>
+                    </div>
+                )}
+
+                <div className="md:col-span-2">
+                    <button onClick={handleGenerateReport} disabled={isLoading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                        {isLoading ? 'Generating...' : 'Generate Report'}
+                    </button>
+                </div>
+            </div>
+
+            {result && (
+                <div className="mt-6 p-4 bg-gray-700 rounded-lg">
+                    <h3 className="font-semibold text-lg">Report Result:</h3>
+                    <p className="mt-2 text-gray-200">{result}</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Standard UI Components ---
+// (All other components remain here, unchanged from the previous version)
+
 const ContainerCard = ({ container, onSelect, isArchived }) => {
     let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
     if (container.status.startsWith('Assigned to Driver')) {
@@ -422,7 +560,7 @@ const ContainerCard = ({ container, onSelect, isArchived }) => {
     return (
         <div 
             onClick={() => onSelect(container)}
-            className={`bg-gray-800 p-4 rounded-lg shadow-lg border-2 ${isArchived ? 'border-gray-600' : 'cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-transparent'}`}
+            className={`bg-gray-800 p-4 rounded-lg shadow-lg border-2 ${isArchived ? 'border-gray-600 cursor-default' : 'cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-transparent'}`}
         >
             <div className="flex justify-between items-start">
                 <h3 className="text-lg font-bold text-blue-400 break-all">{container.id}</h3>
@@ -440,7 +578,6 @@ const ContainerCard = ({ container, onSelect, isArchived }) => {
     );
 };
 
-// Grid View Component
 const GridContainerView = ({ containers, onEdit, isArchived }) => {
     return (
         <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
@@ -489,8 +626,9 @@ const GridContainerView = ({ containers, onEdit, isArchived }) => {
     );
 };
 
+// ... ALL OTHER MODALS AND UI COMPONENTS (BookingModal, ContainerModal, CollectionsModal, etc.) remain here, unchanged ...
+// ... (omitted for brevity)
 
-// Modal for Adding a Booking
 const BookingModal = ({ onClose, bookingsPath, containerTypes }) => {
     const [formData, setFormData] = useState({
         id: '',
@@ -575,7 +713,6 @@ const BookingModal = ({ onClose, bookingsPath, containerTypes }) => {
 };
 
 
-// Modal for Adding/Editing a container
 const ContainerModal = ({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath, isArchived }) => {
     const isNew = !container;
     const [formData, setFormData] = useState(
