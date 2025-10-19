@@ -114,11 +114,16 @@ const DatabaseIcon = () => (
     </svg>
 );
 
+const ArchiveIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M10 12h4"/><path d="M22 3H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Z"/></svg>
+);
+
 
 // Main App Component
 export default function App() {
     const [user, setUser] = useState(null);
     const [containers, setContainers] = useState([]);
+    const [archivedContainers, setArchivedContainers] = useState([]);
     const [bookings, setBookings] = useState([]);
     const [collectionsData, setCollectionsData] = useState({
         drivers: [],
@@ -133,6 +138,7 @@ export default function App() {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [pageView, setPageView] = useState('live'); // 'live' or 'archive'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
 
     // --- Save view preference ---
@@ -220,6 +226,24 @@ export default function App() {
             return () => unsubscribe();
         }
     }, [user, containersPath]);
+    
+    // Fetch Archived Containers
+    useEffect(() => {
+        if (user) {
+            const q = query(collection(db, archivePath));
+            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                const archiveData = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    archivedAt: doc.data().archivedAt?.toDate()
+                }));
+                setArchivedContainers(archiveData);
+            }, (error) => {
+                console.error("Error fetching archived containers:", error);
+            });
+            return () => unsubscribe();
+        }
+    }, [user, archivePath]);
 
     // Fetch bookings
     useEffect(() => {
@@ -270,14 +294,16 @@ export default function App() {
 
     // Filter containers based on search term
     const filteredContainers = useMemo(() => {
-        if (!searchTerm) return containers;
-        return containers.filter(c => 
+        const source = pageView === 'live' ? containers : archivedContainers;
+        if (!searchTerm) return source;
+        return source.filter(c => 
             c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.booking?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.truck?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            c.deliveryDriver?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.bookedFor?.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [containers, searchTerm]);
+    }, [containers, archivedContainers, searchTerm, pageView]);
 
 
     return (
@@ -286,9 +312,16 @@ export default function App() {
                 <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
                     <div className="flex items-center mb-4 sm:mb-0">
                          <TruckIcon />
-                         <h1 className="text-2xl font-bold text-white">Container Yard Tracker</h1>
+                         <h1 className="text-2xl font-bold text-white">{pageView === 'live' ? 'Container Yard Tracker' : 'Archived Containers'}</h1>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <button
+                            onClick={() => setPageView(pageView === 'live' ? 'archive' : 'live')}
+                            className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <ArchiveIcon />
+                            {pageView === 'live' ? 'View Archive' : 'View Live Yard'}
+                        </button>
                         <button
                             onClick={() => setIsCollectionsModalOpen(true)}
                             className="flex items-center justify-center bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
@@ -332,7 +365,7 @@ export default function App() {
                 ) : view === 'card' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredContainers.map((container) => (
-                            <ContainerCard key={container.id} container={container} onSelect={handleOpenModal} />
+                            <ContainerCard key={container.id} container={container} onSelect={handleOpenModal} isArchived={pageView === 'archive'}/>
                         ))}
                     </div>
                 ) : (
@@ -340,6 +373,7 @@ export default function App() {
                         containers={filteredContainers}
                         collections={collectionsData}
                         onEdit={handleOpenModal}
+                        isArchived={pageView === 'archive'}
                     />
                 )}
             </div>
@@ -354,6 +388,7 @@ export default function App() {
                     containersPath={containersPath}
                     eventsPath={eventsPath}
                     archivePath={archivePath}
+                    isArchived={pageView === 'archive'}
                 />
             )}
             {isBookingModalOpen && (
@@ -375,7 +410,7 @@ export default function App() {
 }
 
 // Card component for displaying a single container
-const ContainerCard = ({ container, onSelect }) => {
+const ContainerCard = ({ container, onSelect, isArchived }) => {
     let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
     if (container.status.startsWith('Assigned to Driver')) {
         statusInfo = { emoji: '👨‍✈️', label: container.status };
@@ -387,7 +422,7 @@ const ContainerCard = ({ container, onSelect }) => {
     return (
         <div 
             onClick={() => onSelect(container)}
-            className="bg-gray-800 p-4 rounded-lg shadow-lg cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-2 border-transparent"
+            className={`bg-gray-800 p-4 rounded-lg shadow-lg border-2 ${isArchived ? 'border-gray-600' : 'cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-transparent'}`}
         >
             <div className="flex justify-between items-start">
                 <h3 className="text-lg font-bold text-blue-400 break-all">{container.id}</h3>
@@ -398,7 +433,7 @@ const ContainerCard = ({ container, onSelect }) => {
                 <p><span className="font-semibold text-gray-300">Booking:</span> {container.booking || 'N/A'}</p>
                 <p><span className="font-semibold text-gray-300">For:</span> {container.bookedFor || 'N/A'}</p>
                 <p className="text-xs text-gray-500 mt-2">
-                    Updated: {container.lastUpdate ? new Date(container.lastUpdate).toLocaleString() : 'N/A'}
+                    {isArchived ? `Archived: ${container.archivedAt ? new Date(container.archivedAt).toLocaleString() : 'N/A'}` : `Updated: ${container.lastUpdate ? new Date(container.lastUpdate).toLocaleString() : 'N/A'}`}
                 </p>
             </div>
         </div>
@@ -406,7 +441,7 @@ const ContainerCard = ({ container, onSelect }) => {
 };
 
 // Grid View Component
-const GridContainerView = ({ containers, collections, onEdit }) => {
+const GridContainerView = ({ containers, onEdit, isArchived }) => {
     return (
         <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
             <table className="min-w-full text-sm text-left text-gray-300">
@@ -416,7 +451,7 @@ const GridContainerView = ({ containers, collections, onEdit }) => {
                         <th scope="col" className="px-6 py-3">Status</th>
                         <th scope="col" className="px-6 py-3">Booking #</th>
                         <th scope="col" className="px-6 py-3">Type</th>
-                        <th scope="col" className="px-6 py-3">Truck/Driver</th>
+                        <th scope="col" className="px-6 py-3">Delivery Driver</th>
                         <th scope="col" className="px-6 py-3">Chassis</th>
                         <th scope="col" className="px-6 py-3">Seal #</th>
                         <th scope="col" className="px-6 py-3">Actions</th>
@@ -437,12 +472,12 @@ const GridContainerView = ({ containers, collections, onEdit }) => {
                                 <td className="px-6 py-4 whitespace-nowrap"><span className="mr-2">{statusInfo.emoji}</span>{statusInfo.label}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{container.booking || 'N/A'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{container.bookedFor || 'N/A'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap">{container.truck || 'N/A'}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{container.deliveryDriver || container.truck || 'N/A'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{container.chassis || 'N/A'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{container.seal || 'N/A'}</td>
                                 <td className="px-6 py-4">
                                     <button onClick={() => onEdit(container)} className="text-blue-400 hover:text-blue-300 font-semibold">
-                                        Edit
+                                        {isArchived ? 'View' : 'Edit'}
                                     </button>
                                 </td>
                             </tr>
@@ -541,7 +576,7 @@ const BookingModal = ({ onClose, bookingsPath, containerTypes }) => {
 
 
 // Modal for Adding/Editing a container
-const ContainerModal = ({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath }) => {
+const ContainerModal = ({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath, isArchived }) => {
     const isNew = !container;
     const [formData, setFormData] = useState(
         isNew 
@@ -908,6 +943,25 @@ const ContainerModal = ({ container, events, onClose, bookings, collections, con
     }, [formData.status]);
     
     const renderContent = () => {
+        if(isArchived){
+             return (
+                <div className="p-6">
+                    <div className="space-y-3 mb-6">
+                        <h3 className="text-lg font-semibold text-center">Archived Container Details</h3>
+                        {Object.entries(container).map(([key, value]) => {
+                           if (typeof value !== 'object' || value === null) {
+                                return <InputField key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={String(value)} disabled />
+                           }
+                           return null;
+                        })}
+                    </div>
+                     <div className="flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
+                     </div>
+                </div>
+            )
+        }
+
         if (isNew) {
             return (
                 <form onSubmit={handleSubmit} className="p-4 space-y-4">
