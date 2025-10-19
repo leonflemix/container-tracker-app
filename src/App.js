@@ -421,6 +421,7 @@ export default function App() {
                     onClose={() => setIsBookingModalOpen(false)}
                     bookings={bookings}
                     containers={containers}
+                    archivedContainers={archivedContainers}
                     bookingsPath={bookingsPath}
                     containerTypes={collectionsData.containerTypes}
                 />
@@ -631,7 +632,7 @@ const GridContainerView = ({ containers, onEdit, isArchived }) => {
 // ... ALL OTHER MODALS AND UI COMPONENTS (BookingModal, ContainerModal, CollectionsModal, etc.) remain here, unchanged ...
 // ... (omitted for brevity)
 
-const BookingModal = ({ onClose, bookings, containers, bookingsPath, containerTypes }) => {
+const BookingModal = ({ onClose, bookings, containers, archivedContainers, bookingsPath, containerTypes }) => {
     const [isAdding, setIsAdding] = useState(false);
     const [formData, setFormData] = useState({
         id: '',
@@ -642,10 +643,12 @@ const BookingModal = ({ onClose, bookings, containers, bookingsPath, containerTy
 
     const filledCounts = useMemo(() => {
         return bookings.reduce((acc, booking) => {
-            acc[booking.id] = containers.filter(c => c.booking === booking.id).length;
+            const liveCount = containers.filter(c => c.booking === booking.id).length;
+            const archivedCount = archivedContainers.filter(c => c.booking === booking.id).length;
+            acc[booking.id] = liveCount + archivedCount;
             return acc;
         }, {});
-    }, [bookings, containers]);
+    }, [bookings, containers, archivedContainers]);
 
     const handleChange = (e) => {
         const { name, value, type } = e.target;
