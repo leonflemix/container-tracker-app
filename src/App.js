@@ -535,31 +535,33 @@ const ReportsPage = ({ archivePath, collections }) => {
         try {
             let q;
             let summary = '';
+            
+            const isDateRangeReport = ['shippedByDate', 'byDriver', 'holesBefore', 'holesAfterOnly'].includes(reportType);
+            
+            if (isDateRangeReport && (!startDate || !endDate)) {
+                alert('Please select a start and end date.');
+                setIsLoading(false);
+                return;
+            }
+
+            const start = isDateRangeReport ? Timestamp.fromDate(new Date(startDate)) : null;
+            const end = isDateRangeReport ? Timestamp.fromDate(new Date(endDate)) : null;
 
             if (reportType === 'shippedByDate') {
-                if (!startDate || !endDate) {
-                    alert('Please select a start and end date.');
-                    setIsLoading(false);
-                    return;
-                }
-                const start = Timestamp.fromDate(new Date(startDate));
-                const end = Timestamp.fromDate(new Date(endDate));
                 q = query(collection(db, archivePath), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
                 summary = (size) => `Found ${size} shipped containers in this period.`;
             } else if (reportType === 'holesBefore') {
-                q = query(collection(db, archivePath), where('hasHolesBeforeSquish', '==', true));
-                summary = (size) => `Found ${size} containers with holes before squishing.`;
+                q = query(collection(db, archivePath), where('hasHolesBeforeSquish', '==', true), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
+                summary = (size) => `Found ${size} containers with holes before squishing in this period.`;
             } else if (reportType === 'holesAfterOnly') {
-                q = query(collection(db, archivePath), where('hasHolesBeforeSquish', '==', false), where('hasHolesAfterSquish', '==', true));
-                summary = (size) => `Found ${size} containers with holes only after squishing.`;
+                q = query(collection(db, archivePath), where('hasHolesBeforeSquish', '==', false), where('hasHolesAfterSquish', '==', true), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
+                summary = (size) => `Found ${size} containers with holes only after squishing in this period.`;
             } else if (reportType === 'byDriver') {
-                if (!selectedDriver || !startDate || !endDate) {
-                    alert('Please select a driver and a date range.');
+                if (!selectedDriver) {
+                    alert('Please select a driver.');
                     setIsLoading(false);
                     return;
                 }
-                 const start = Timestamp.fromDate(new Date(startDate));
-                const end = Timestamp.fromDate(new Date(endDate));
                 q = query(collection(db, archivePath), where('deliveryDriver', '==', selectedDriver), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
                 summary = (size) => `Found ${size} containers delivered by ${selectedDriver} in this period.`;
             }
@@ -573,7 +575,7 @@ const ReportsPage = ({ archivePath, collections }) => {
 
         } catch (error) {
             console.error("Error generating report:", error);
-            setReportData({ summary: 'Error generating report. See console for details.', data: [] });
+            setReportData({ summary: 'Error generating report. You may need to create a composite index in Firestore. Check the console for a direct link.', data: [] });
         }
 
         setIsLoading(false);
@@ -595,7 +597,7 @@ const ReportsPage = ({ archivePath, collections }) => {
                     </select>
                 </div>
 
-                {(reportType === 'shippedByDate' || reportType === 'byDriver') && (
+                {(reportType === 'shippedByDate' || reportType === 'byDriver' || reportType === 'holesBefore' || reportType === 'holesAfterOnly') && (
                     <div className="grid grid-cols-2 gap-4">
                         <InputField label="Start Date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                         <InputField label="End Date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
