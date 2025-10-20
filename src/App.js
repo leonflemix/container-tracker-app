@@ -249,7 +249,7 @@ export default function App() {
                     <div className="flex items-center mb-4 sm:mb-0">
                          <TruckIcon />
                          <h1 className="text-2xl font-bold text-white">
-                            {pageView === 'live' && 'Container Yard Tracker'}
+                            {pageView === 'live' && 'Container Yard Tracker2'}
                             {pageView === 'archive' && 'Archived Containers'}
                             {pageView === 'reports' && 'Reports'}
                         </h1>
