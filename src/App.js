@@ -227,7 +227,13 @@ export default function App() {
                 ) : view === 'card' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredContainers.map((container) => (
-                            <ContainerCard key={container.id} container={container} onSelect={handleOpenModal} isArchived={pageView === 'archive'}/>
+                            <ContainerCard 
+                                key={container.id} 
+                                container={container} 
+                                onSelect={handleOpenModal} 
+                                isArchived={pageView === 'archive'}
+                                containerTypes={collectionsData.containerTypes}
+                            />
                         ))}
                     </div>
                 ) : (
@@ -249,7 +255,7 @@ export default function App() {
                     <div className="flex items-center mb-4 sm:mb-0">
                          <TruckIcon />
                          <h1 className="text-2xl font-bold text-white">
-                            {pageView === 'live' && 'Container Yard Tracker2'}
+                            {pageView === 'live' && 'Container Yard Tracker'}
                             {pageView === 'archive' && 'Archived Containers'}
                             {pageView === 'reports' && 'Reports'}
                         </h1>

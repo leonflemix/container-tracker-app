@@ -1,3 +1,4 @@
+// File: src/components/CollectionManager.jsx
 import React, { useState } from 'react';
 import CollectionForm from './CollectionForm';
 import ConfirmationModal from './ConfirmationModal';
@@ -54,7 +55,15 @@ export default function CollectionManager({ collectionName, data = [], onSave, o
                     <div key={item.docId} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
                         <div className="text-sm">
                             {Object.entries(fields).map(([key]) => (
-                                <p key={key}><span className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span> {String(item[key])}</p>
+                                key === 'color' ? (
+                                    <p key={key} className="flex items-center">
+                                        <span className="font-semibold capitalize mr-1">{key.replace(/([A-Z])/g, ' $1')}:</span>
+                                        <span style={{ backgroundColor: item[key] }} className="w-4 h-4 rounded-full border border-gray-400 mr-2"></span>
+                                        <span>{String(item[key])}</span>
+                                    </p>
+                                ) : (
+                                    <p key={key}><span className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span> {String(item[key])}</p>
+                                )
                             ))}
                         </div>
                         <div className="flex gap-2">

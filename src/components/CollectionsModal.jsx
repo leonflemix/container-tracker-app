@@ -1,3 +1,4 @@
+// File: src/components/CollectionsModal.jsx
 import React, { useState } from 'react';
 import { db } from '../firebase';
 import { collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -42,7 +43,7 @@ export default function CollectionsModal({ onClose, paths, collectionsData }) {
                     {activeTab === 'drivers' && <CollectionManager collectionName="drivers" data={collectionsData.drivers} onSave={handleSave} onDelete={handleDelete} fields={{name: 'text', id: 'text', plate: 'text', weight: 'number'}} />}
                     {activeTab === 'locations' && <CollectionManager collectionName="locations" data={collectionsData.locations} onSave={handleSave} onDelete={handleDelete} fields={{location: 'text'}} />}
                     {activeTab === 'chassis' && <CollectionManager collectionName="chassis" data={collectionsData.chassis} onSave={handleSave} onDelete={handleDelete} fields={{id: 'text', weight: 'number', is2x20: 'boolean', is40ft: 'boolean'}} />}
-                    {activeTab === 'containerTypes' && <CollectionManager collectionName="containerTypes" data={collectionsData.containerTypes} onSave={handleSave} onDelete={handleDelete} fields={{name: 'text'}} />}
+                    {activeTab === 'containerTypes' && <CollectionManager collectionName="containerTypes" data={collectionsData.containerTypes} onSave={handleSave} onDelete={handleDelete} fields={{name: 'text', color: 'color'}} />}
                 </div>
             </div>
         </div>

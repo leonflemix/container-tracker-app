@@ -1,3 +1,4 @@
+// File: src/components/BookingModal.jsx
 import React, { useMemo, useState } from 'react';
 import { db, Timestamp } from '../firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
@@ -79,7 +80,9 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
                                 >
                                     <option value="">-- Select a Type --</option>
                                     {containerTypes.map(type => (
-                                        <option key={type.docId} value={type.name}>{type.name}</option>
+                                        <option key={type.docId} value={type.name} style={{ color: type.color || 'inherit', backgroundColor: '#374151' }}>
+                                            {type.name}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -94,18 +97,23 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
                     ) : (
                         <div>
                             <div className="space-y-3 mb-4">
-                                {bookings.map(booking => (
-                                    <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
-                                        <div>
-                                            <p className="font-bold text-white">{booking.id}</p>
-                                            <p className="text-sm text-gray-400">{booking.type}</p>
+                                {bookings.map(booking => {
+                                    const typeInfo = containerTypes.find(t => t.name === booking.type);
+                                    return (
+                                        <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
+                                            <div>
+                                                <p className="font-bold text-white">{booking.id}</p>
+                                                <p className="text-sm font-semibold" style={{ color: typeInfo?.color || 'inherit' }}>
+                                                    {booking.type}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-lg font-semibold text-white">{filledCounts[booking.id] || 0} / {booking.quantity}</p>
+                                                <p className="text-xs text-gray-400">Filled</p>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-semibold text-white">{filledCounts[booking.id] || 0} / {booking.quantity}</p>
-                                            <p className="text-xs text-gray-400">Filled</p>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                             <div className="flex justify-end gap-3">
                                  <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>

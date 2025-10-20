@@ -1,3 +1,4 @@
+// File: src/components/ContainerModal.jsx
 import React, { useMemo, useState } from 'react';
 import { db, Timestamp } from '../firebase';
 import {
@@ -421,11 +422,25 @@ export default function ContainerModal({ container, events, onClose, bookings, c
             );
         }
 
+        // Find color info for the container type
+        const typeInfo = collections.containerTypes.find(t => t.name === formData.bookedFor);
+        const typeColor = typeInfo?.color || '#6B7280'; // gray-500 default
+
         return (
             <div className="flex flex-col lg:flex-row">
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
                     <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Container Type</label>
+                        <div className="w-full p-2 bg-gray-600 text-white rounded-md border border-gray-600 flex items-center cursor-not-allowed">
+                            <span 
+                                style={{ backgroundColor: typeColor }} 
+                                className="w-4 h-4 rounded-full mr-2 border border-gray-400"
+                            ></span>
+                            {formData.bookedFor}
+                        </div>
+                    </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>

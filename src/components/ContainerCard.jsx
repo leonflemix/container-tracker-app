@@ -1,7 +1,8 @@
+// File: src/components/ContainerCard.jsx
 import React from 'react';
 import { CONTAINER_STATUSES } from '../constants';
 
-export default function ContainerCard({ container, onSelect, isArchived }) {
+export default function ContainerCard({ container, onSelect, isArchived, containerTypes = [] }) {
     let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
     if (container.status && container.status.startsWith('Assigned to Driver')) {
         statusInfo = { emoji: '👨‍✈️', label: container.status };
@@ -9,6 +10,9 @@ export default function ContainerCard({ container, onSelect, isArchived }) {
     if (!statusInfo) {
         statusInfo = { emoji: '📍', label: container.status };
     }
+
+    const typeInfo = containerTypes.find(t => t.name === container.bookedFor);
+    const typeColor = typeInfo?.color || 'inherit';
 
     return (
         <div 
@@ -22,7 +26,10 @@ export default function ContainerCard({ container, onSelect, isArchived }) {
             <p className="text-sm text-gray-400 mt-1">{statusInfo.label}</p>
             <div className="mt-3 text-sm">
                 <p><span className="font-semibold text-gray-300">Booking:</span> {container.booking || 'N/A'}</p>
-                <p><span className="font-semibold text-gray-300">For:</span> {container.bookedFor || 'N/A'}</p>
+                <p>
+                    <span className="font-semibold text-gray-300">For:</span> 
+                    <span className="font-semibold" style={{ color: typeColor }}> {container.bookedFor || 'N/A'}</span>
+                </p>
                 <p className="text-xs text-gray-500 mt-2">
                     {isArchived ? `Archived: ${container.archivedAt ? new Date(container.archivedAt).toLocaleString() : 'N/A'}` : `Updated: ${container.lastUpdate ? new Date(container.lastUpdate).toLocaleString() : 'N/A'}`}
                 </p>
