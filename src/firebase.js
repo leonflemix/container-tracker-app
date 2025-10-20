@@ -1,12 +1,8 @@
-// File: src/firebase-config.js
-// Location: In the 'src' directory of your React project.
-
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, Timestamp } from 'firebase/firestore';
 
 let firebaseConfig;
-
 try {
   if (typeof window !== 'undefined' && typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
     firebaseConfig = JSON.parse(window.__firebase_config);
@@ -29,7 +25,7 @@ try {
 }
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-export { db, auth, app };
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export { Timestamp };
+export default app;

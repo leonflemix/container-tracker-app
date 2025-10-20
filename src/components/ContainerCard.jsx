@@ -1,0 +1,32 @@
+import React from 'react';
+import { CONTAINER_STATUSES } from '../constants';
+
+export default function ContainerCard({ container, onSelect, isArchived }) {
+    let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
+    if (container.status && container.status.startsWith('Assigned to Driver')) {
+        statusInfo = { emoji: '👨‍✈️', label: container.status };
+    }
+    if (!statusInfo) {
+        statusInfo = { emoji: '📍', label: container.status };
+    }
+
+    return (
+        <div 
+            onClick={() => onSelect(container)}
+            className={`bg-gray-800 p-4 rounded-lg shadow-lg border-2 ${isArchived ? 'border-gray-600 cursor-default' : 'cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-transparent'}`}
+        >
+            <div className="flex justify-between items-start">
+                <h3 className="text-lg font-bold text-blue-400 break-all">{container.id}</h3>
+                <span className="text-2xl">{statusInfo.emoji}</span>
+            </div>
+            <p className="text-sm text-gray-400 mt-1">{statusInfo.label}</p>
+            <div className="mt-3 text-sm">
+                <p><span className="font-semibold text-gray-300">Booking:</span> {container.booking || 'N/A'}</p>
+                <p><span className="font-semibold text-gray-300">For:</span> {container.bookedFor || 'N/A'}</p>
+                <p className="text-xs text-gray-500 mt-2">
+                    {isArchived ? `Archived: ${container.archivedAt ? new Date(container.archivedAt).toLocaleString() : 'N/A'}` : `Updated: ${container.lastUpdate ? new Date(container.lastUpdate).toLocaleString() : 'N/A'}`}
+                </p>
+            </div>
+        </div>
+    );
+}
