@@ -141,33 +141,26 @@ function AppContent() {
         if (user) {
             const q = query(collection(db, containersPath));
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "modified") {
-                        const containerId = change.doc.id;
-                        setRecentlyUpdated(prev => [...prev, containerId]);
-                        setTimeout(() => {
-                            setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
-                        }, 3000); // Highlight duration
-                    }
-                });
-                
-                // More robust state update
-                setContainers(prevContainers => {
-                    const containerMap = new Map(prevContainers.map(c => [c.id, c]));
-                    snapshot.docChanges().forEach(change => {
-                        if (change.type === 'removed') {
-                            containerMap.delete(change.doc.id);
-                        } else {
-                            containerMap.set(change.doc.id, {
-                                id: change.doc.id,
-                                ...change.doc.data(),
-                                lastUpdate: change.doc.data().lastUpdate?.toDate(),
-                                createdAt: change.doc.data().createdAt?.toDate()
-                            });
+                const containersData = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    lastUpdate: doc.data().lastUpdate?.toDate(),
+                    createdAt: doc.data().createdAt?.toDate()
+                }));
+                setContainers(containersData);
+
+                // Only trigger highlights for changes after the initial load
+                if (!isInitialContainersLoad.current) {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "modified") {
+                            const containerId = change.doc.id;
+                            setRecentlyUpdated(prev => [...prev, containerId]);
+                            setTimeout(() => {
+                                setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
+                            }, 3000); // Highlight duration
                         }
                     });
-                    return Array.from(containerMap.values());
-                });
+                }
 
                 if (isInitialContainersLoad.current) {
                     setLoading(false);
