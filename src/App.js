@@ -54,6 +54,7 @@ function AppContent() {
 
     const { addToast } = useToasts();
     const eventsInitialized = useRef(false);
+    const isInitialContainersLoad = useRef(true);
 
     // --- Save preferences to localStorage ---
     useEffect(() => {
@@ -138,28 +139,9 @@ function AppContent() {
     // Container listener with highlight logic
     useEffect(() => {
         if (user) {
-            setLoading(true);
             const q = query(collection(db, containersPath));
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                let currentContainers = [];
-                // Initialize from full list on first load
-                if (loading) {
-                    currentContainers = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        lastUpdate: doc.data().lastUpdate?.toDate(),
-                        createdAt: doc.data().createdAt?.toDate() // Ensure createdAt is a Date
-                    }));
-                }
-                
                 snapshot.docChanges().forEach((change) => {
-                    const changedDoc = {
-                        id: change.doc.id,
-                        ...change.doc.data(),
-                        lastUpdate: change.doc.data().lastUpdate?.toDate(),
-                        createdAt: change.doc.data().createdAt?.toDate()
-                    };
-
                     if (change.type === "modified") {
                         const containerId = change.doc.id;
                         setRecentlyUpdated(prev => [...prev, containerId]);
@@ -187,14 +169,18 @@ function AppContent() {
                     return Array.from(containerMap.values());
                 });
 
-                setLoading(false);
+                if (isInitialContainersLoad.current) {
+                    setLoading(false);
+                    isInitialContainersLoad.current = false;
+                }
+
             }, (error) => {
                 console.error("Error fetching containers:", error);
                 setLoading(false);
             });
             return () => unsubscribe();
         }
-    }, [user, containersPath, loading]);
+    }, [user, containersPath]);
     
     useEffect(() => {
         if (user) {
