@@ -38,38 +38,39 @@ export default function ContainerModal({
     preselectedBooking
 }) {
     const isNew = !container;
-    const [formData, setFormData] = useState(
-        isNew 
-        ? { id: '', tareWeight: 0, booking: '' }
-        : {
-            id: container?.id || '',
-            status: container?.status || 'New',
-            truck: container?.truck || '',
-            deliveryDriver: container?.deliveryDriver || '',
-            grossWeight: container?.grossWeight || 0,
-            chassis: container?.chassis || '',
-            tareWeight: container?.tareWeight || 0,
-            seal: container?.seal || '',
-            booking: container?.booking || '',
-            bookedFor: container?.bookedFor || '',
-            hasHolesBeforeSquish: container?.hasHolesBeforeSquish || false,
-            hasHolesAfterSquish: container?.hasHolesAfterSquish || false,
-        }
-    );
+    const [formData, setFormData] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState('');
     const [selectedDriver, setSelectedDriver] = useState('');
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-    const [denialStep, setDenialStep] = useState(null); // 'choose'
+    const [denialStep, setDenialStep] = useState(null);
     const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
 
-    // Pre-select booking if passed as a prop
     useEffect(() => {
-        if (isNew && preselectedBooking) {
-            setFormData(prev => ({ ...prev, booking: preselectedBooking }));
+        if (isNew) {
+            setFormData({
+                id: '',
+                tareWeight: 0,
+                booking: preselectedBooking || ''
+            });
+        } else if (container) {
+            setFormData({
+                id: container.id || '',
+                status: container.status || 'New',
+                truck: container.truck || '',
+                deliveryDriver: container.deliveryDriver || '',
+                grossWeight: container.grossWeight || 0,
+                chassis: container.chassis || '',
+                tareWeight: container.tareWeight || 0,
+                seal: container.seal || '',
+                booking: container.booking || '',
+                bookedFor: container.bookedFor || '',
+                hasHolesBeforeSquish: container.hasHolesBeforeSquish || false,
+                hasHolesAfterSquish: container.hasHolesAfterSquish || false,
+            });
         }
-    }, [isNew, preselectedBooking]);
+    }, [container, isNew, preselectedBooking]);
 
 
     const isAtLocation = useMemo(() => {
@@ -86,14 +87,12 @@ export default function ContainerModal({
         setIsScannerOpen(false);
         console.log("Scanned Text:", text);
 
-        // Regex to find container number (4 letters, then numbers)
         const containerIdMatch = text.match(/[A-Z]{4}\s?\d+/);
-        // Regex to find TARE weight in KGS
         const tareMatch = text.match(/TARE[\s\S]*?(\d{1,3}(?:,?\d{3})*)\s*KGS/i);
 
         let foundId = '';
         if (containerIdMatch) {
-            foundId = containerIdMatch[0].replace(/\s/g, ''); // Remove spaces
+            foundId = containerIdMatch[0].replace(/\s/g, '');
             setFormData(prev => ({ ...prev, id: foundId }));
             addToast(`Found Container ID: ${foundId}`, 'success');
         } else {
@@ -143,7 +142,7 @@ export default function ContainerModal({
                     booking: formData.booking,
                     bookedFor: selectedBooking?.type || 'N/A',
                     status: 'New',
-                    createdAt: Timestamp.now(), // <-- Add createdAt timestamp
+                    createdAt: Timestamp.now(),
                     lastUpdate: Timestamp.now(),
                     truck: '',
                     deliveryDriver: '',
@@ -158,7 +157,6 @@ export default function ContainerModal({
                 batch.set(doc(collection(db, eventsPath)), eventData);
                 addToast(`Container ${formData.id.toUpperCase()} added successfully!`, 'success');
 
-                // Check if this container fills the booking
                 const currentFilledCount = filledBookingCounts[selectedBooking.id] || 0;
                 if (currentFilledCount + 1 >= selectedBooking.quantity) {
                     const bookingToArchiveRef = doc(db, bookingsPath, selectedBooking.id);
@@ -193,7 +191,6 @@ export default function ContainerModal({
         } finally { setIsSaving(false); }
     };
     
-    // ... (rest of handlers are unchanged) ...
     const handleDelete = async () => {
         if (!container) return;
         try {
@@ -310,7 +307,6 @@ export default function ContainerModal({
             const containerRef = doc(db, containersPath, container.id);
             try {
                 const archiveRef = doc(db, archivePath, container.id);
-                // Calculate daysInYard before archiving
                 const createdAt = container.createdAt.seconds;
                 const archivedAt = Timestamp.now().seconds;
                 const daysInYard = Math.floor((archivedAt - createdAt) / (60 * 60 * 24));
@@ -330,7 +326,6 @@ export default function ContainerModal({
                 setIsSaving(false);
             }
         } else {
-            // Start the denial workflow
             setDenialStep('choose');
         }
     };
@@ -382,7 +377,7 @@ export default function ContainerModal({
         
         const revivedData = { ...container, status: 'Revived - Awaiting Update', lastUpdate: Timestamp.now() };
         delete revivedData.archivedAt;
-        delete revivedData.daysInYard; // Remove final count as it's live again
+        delete revivedData.daysInYard;
 
         try {
             batch.set(liveRef, revivedData);
@@ -419,7 +414,10 @@ export default function ContainerModal({
     }, [formData.status]);
 
     const renderContent = () => {
-        if(isArchived){
+        if (!isNew && !container) {
+            return <div className="p-6 text-center text-gray-400">Loading container details...</div>;
+        }
+        if (isArchived) {
              return (
                 <div className="flex flex-col lg:flex-row">
                     <div className="p-4 lg:w-1/2 space-y-3">
@@ -495,14 +493,202 @@ export default function ContainerModal({
             );
         }
         
-        // ... (rest of renderContent is unchanged) ...
+        if (container.status === 'New') {
+            return (
+                <form onSubmit={handleLocationSubmit} className="p-4 space-y-4">
+                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
+                    <div>
+                        <label htmlFor="location" className="block text-sm font-medium text-gray-300 mb-1">Move to Location *</label>
+                        <select
+                            id="location"
+                            name="location"
+                            value={selectedLocation}
+                            onChange={(e) => setSelectedLocation(e.target.value)}
+                            required
+                            className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">-- Select a Location --</option>
+                            {collections.locations.map(loc => (
+                                <option key={loc.docId} value={loc.location}>{loc.location}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                            {isSaving ? 'Saving...' : 'Update Location'}
+                        </button>
+                        </div>
+                </form>
+            );
+        }
+
+        if (isAtLocation) {
+             return (
+                <div className="p-4 flex flex-col items-center justify-center">
+                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
+                    <InputField label="Current Location" name="status" value={container.status} disabled={true} />
+                    <div className="pt-6">
+                        <button 
+                            onClick={handleMarkAsLoaded} 
+                            disabled={isSaving}
+                            className="py-3 px-6 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-lg disabled:bg-green-800"
+                        >
+                            {isSaving ? 'Updating...' : 'Mark as Loaded'}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (container.status === 'ALL GOOD, BOOK FOR DELIVERY') {
+            return (
+                <form onSubmit={handleAssignDriver} className="p-4 space-y-4">
+                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
+                    <div>
+                        <label htmlFor="deliveryDriver" className="block text-sm font-medium text-gray-300 mb-1">Assign Delivery Truck/Driver *</label>
+                        <select
+                            id="deliveryDriver"
+                            name="deliveryDriver"
+                            value={selectedDriver}
+                            onChange={(e) => setSelectedDriver(e.target.value)}
+                            required
+                            className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">-- Select Driver --</option>
+                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
+                        </select>
+                    </div>
+                    <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                            {isSaving ? 'Saving...' : 'Assign Driver'}
+                        </button>
+                    </div>
+                </form>
+            );
+        }
+
+        if (container.status && container.status.startsWith('Assigned to Driver')) {
+            const driver = collections.drivers.find(d => d.name === container.deliveryDriver);
+            
+            if (denialStep === 'choose') {
+                return (
+                    <div className="p-6 text-center">
+                        <h3 className="text-lg font-semibold mb-4">What is the next step for this denied container?</h3>
+                        <div className="flex justify-center gap-4">
+                             <button onClick={handleReturnToTilter} disabled={isSaving} className="py-2 px-4 bg-orange-600 hover:bg-orange-500 rounded-lg">
+                                Return to Tilter/Location
+                            </button>
+                            <button onClick={handleNeedsUpdatesAfterDenial} disabled={isSaving} className="py-2 px-4 bg-indigo-600 hover:bg-indigo-500 rounded-lg">
+                                Needs Manual Update
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="p-6">
+                    <div className="space-y-3 mb-6">
+                        <h3 className="text-lg font-semibold text-center">{container.status}</h3>
+                        <InputField label="Container #" value={container.id} disabled />
+                        <InputField label="Booking #" value={container.booking} disabled />
+                        {driver && (
+                            <>
+                                <InputField label="Driver ID" value={driver.id} disabled />
+                                <InputField label="Plate" value={driver.plate} disabled />
+                            </>
+                        )}
+                    </div>
+                    <div className="flex justify-between items-center">
+                         <div>
+                            <button onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-800 hover:bg-red-700 rounded-lg text-sm">Delete</button>
+                            <button onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo</button>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => handlePierResponse(false)} disabled={isSaving} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg">Denied</button>
+                            <button onClick={() => handlePierResponse(true)} disabled={isSaving} className="py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg">Accepted</button>
+                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col lg:flex-row">
+                <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
+                    <InputField label="Container #" name="id" value={formData.id} disabled={true} />
+                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                        <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            {availableStatuses.map(s => <option key={s.label} value={s.label}>{s.emoji} {s.label}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Truck/Driver</label>
+                        <select name="truck" value={formData.truck} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select Driver --</option>
+                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Chassis</label>
+                        <select name="chassis" value={formData.chassis} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select Chassis --</option>
+                            {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
+                        </select>
+                    </div>
+                   
+                    <InputField label="Seal #" name="seal" value={formData.seal} onChange={handleChange} />
+                    
+                    <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
+
+                    <div className="flex flex-col gap-2 mt-2">
+                        <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
+                        <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={formData.hasHolesAfterSquish} onChange={handleChange} />
+                    </div>
+                    <div className="pt-4 flex justify-between items-center gap-3">
+                        <div>
+                            <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm">Delete</button>
+                             <button type="button" onClick={handleUndo} disabled={events.length < 2} className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo Last Update</button>
+                        </div>
+                        <div className="flex gap-3">
+                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
+                            <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Changes'}</button>
+                        </div>
+                    </div>
+                </form>
+                <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
+                    <h3 className="text-lg font-semibold mb-3">Event History</h3>
+                    <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                        {events.length > 0 ? (
+                            events.map(event => (
+                                <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
+                                    <p className="font-bold text-gray-200">{event.details.action}</p>
+                                    {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
+                                    <p className="text-xs text-gray-500 text-right mt-1">{new Date(event.timestamp).toLocaleString()}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-gray-500">No events found for this container.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 <header className="flex justify-between items-center p-4 border-b border-gray-700">
-                    <h2 className="text-xl font-bold">{isNew ? 'Add New Container' : `Edit: ${container.id}`}</h2>
+                    <h2 className="text-xl font-bold">{isNew ? 'Add New Container' : `Edit: ${container?.id}`}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
                 <div className="flex-grow overflow-y-auto">

@@ -149,6 +149,7 @@ function AppContent() {
                 }));
                 setContainers(containersData);
 
+                // Only trigger highlights for changes after the initial load
                 if (!isInitialContainersLoad.current) {
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === "modified") {
