@@ -12,7 +12,7 @@ import ReportsPage from './components/ReportsPage';
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
-//import InputField from './components/InputField';
+import InputField from './components/InputField';
 import { ToastProvider, useToasts } from './hooks/useToasts';
 
 // Main App Component Content
@@ -35,20 +35,35 @@ function AppContent() {
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [pageView, setPageView] = useState('live'); // 'live', 'archive', or 'reports'
-    const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
+    const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
-    const [sortConfig, setSortConfig] = useState({ key: 'lastUpdate', direction: 'descending' });
-    const [filters, setFilters] = useState({ status: '', bookedFor: '' });
+    // State for sorting and filtering, now initialized from localStorage
+    const [sortConfig, setSortConfig] = useState(() => {
+        const savedSort = localStorage.getItem('containerTrackerSort');
+        return savedSort ? JSON.parse(savedSort) : { key: 'lastUpdate', direction: 'descending' };
+    });
+    const [filters, setFilters] = useState(() => {
+        const savedFilters = localStorage.getItem('containerTrackerFilters');
+        return savedFilters ? JSON.parse(savedFilters) : { status: '', bookedFor: '' };
+    });
     const [showFilters, setShowFilters] = useState(false);
-    const [recentlyUpdated, setRecentlyUpdated] = useState([]); // State for highlights
+    const [recentlyUpdated, setRecentlyUpdated] = useState([]);
 
     const { addToast } = useToasts();
     const eventsInitialized = useRef(false);
 
-    // --- Save view preference ---
+    // --- Save preferences to localStorage ---
     useEffect(() => {
         localStorage.setItem('containerTrackerView', view);
     }, [view]);
+
+    useEffect(() => {
+        localStorage.setItem('containerTrackerSort', JSON.stringify(sortConfig));
+    }, [sortConfig]);
+
+    useEffect(() => {
+        localStorage.setItem('containerTrackerFilters', JSON.stringify(filters));
+    }, [filters]);
 
     // --- Dynamically load Tailwind CSS ---
     useEffect(() => {
@@ -116,36 +131,47 @@ function AppContent() {
             setLoading(true);
             const q = query(collection(db, containersPath));
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                const containersData = [];
+                let currentContainers = [];
+                // Initialize from full list on first load
+                if (loading) {
+                    currentContainers = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                        lastUpdate: doc.data().lastUpdate?.toDate()
+                    }));
+                }
+                
                 snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added" || change.type === "modified") {
-                        containersData.push({
-                            id: change.doc.id,
-                            ...change.doc.data(),
-                            lastUpdate: change.doc.data().lastUpdate?.toDate()
-                        });
-                        if (change.type === "modified") {
-                            const containerId = change.doc.id;
-                            setRecentlyUpdated(prev => [...prev, containerId]);
-                            setTimeout(() => {
-                                setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
-                            }, 3000); // Highlight duration
-                        }
+                    const changedDoc = {
+                        id: change.doc.id,
+                        ...change.doc.data(),
+                        lastUpdate: change.doc.data().lastUpdate?.toDate()
+                    };
+
+                    if (change.type === "modified") {
+                        const containerId = change.doc.id;
+                        setRecentlyUpdated(prev => [...prev, containerId]);
+                        setTimeout(() => {
+                            setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
+                        }, 3000); // Highlight duration
                     }
                 });
                 
-                // Update state based on changes
+                // More robust state update
                 setContainers(prevContainers => {
-                    const newContainers = [...prevContainers];
-                    containersData.forEach(updatedContainer => {
-                        const index = newContainers.findIndex(c => c.id === updatedContainer.id);
-                        if (index > -1) {
-                            newContainers[index] = updatedContainer;
+                    const containerMap = new Map(prevContainers.map(c => [c.id, c]));
+                    snapshot.docChanges().forEach(change => {
+                        if (change.type === 'removed') {
+                            containerMap.delete(change.doc.id);
                         } else {
-                            newContainers.push(updatedContainer);
+                            containerMap.set(change.doc.id, {
+                                id: change.doc.id,
+                                ...change.doc.data(),
+                                lastUpdate: change.doc.data().lastUpdate?.toDate()
+                            });
                         }
                     });
-                    return newContainers.filter(c => !snapshot.docChanges().some(change => change.type === 'removed' && change.doc.id === c.id));
+                    return Array.from(containerMap.values());
                 });
 
                 setLoading(false);
@@ -155,7 +181,7 @@ function AppContent() {
             });
             return () => unsubscribe();
         }
-    }, [user, containersPath]);
+    }, [user, containersPath, loading]); // Added loading to dependency
     
     useEffect(() => {
         if (user) {
@@ -277,6 +303,9 @@ function AppContent() {
             filtered.sort((a, b) => {
                 const aValue = a[sortConfig.key];
                 const bValue = b[sortConfig.key];
+                
+                if (aValue == null) return 1; // Put nulls/undefined at the end
+                if (bValue == null) return -1;
 
                 if (aValue < bValue) {
                     return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -313,7 +342,7 @@ function AppContent() {
                                 <button onClick={() => setView('card')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'card' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Card</button>
                                 <button onClick={() => setView('grid')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Grid</button>
                             </div>
-                            <button onClick={() => setShowFilters(!showFilters)} className="p-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700">
+                            <button onClick={() => setShowFilters(!showFilters)} className={`p-3 bg-gray-800 border rounded-lg hover:bg-gray-700 ${showFilters ? 'border-blue-500 text-blue-400' : 'border-gray-700 text-gray-300'}`}>
                                 <FilterIcon />
                             </button>
                         </div>
