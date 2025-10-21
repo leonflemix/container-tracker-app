@@ -324,7 +324,7 @@ export default function ContainerModal({
         const liveRef = doc(db, containersPath, container.id);
         const archiveRef = doc(db, archivePath, container.id);
         
-        const revivedData = { ...container, status: 'Denied - Awaiting Update', lastUpdate: Timestamp.now() };
+        const revivedData = { ...container, status: 'Revived - Awaiting Update', lastUpdate: Timestamp.now() };
         delete revivedData.archivedAt;
 
         try {
