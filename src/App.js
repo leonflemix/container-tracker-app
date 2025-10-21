@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { CONTAINER_STATUSES } from './constants';
+//import { CONTAINER_STATUSES } from './constants';
 import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
@@ -12,7 +12,7 @@ import ReportsPage from './components/ReportsPage';
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
-import InputField from './components/InputField';
+//import InputField from './components/InputField';
 import { ToastProvider, useToasts } from './hooks/useToasts';
 
 // Main App Component Content
