@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
-//import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon } from './icons';
+import { CONTAINER_STATUSES } from './constants';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -36,6 +36,11 @@ function AppContent() {
     const [searchTerm, setSearchTerm] = useState('');
     const [pageView, setPageView] = useState('live'); // 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
+    
+    // New state for sorting and filtering
+    const [sortConfig, setSortConfig] = useState({ key: 'lastUpdate', direction: 'descending' });
+    const [filters, setFilters] = useState({ status: '', bookedFor: '' });
+    const [showFilters, setShowFilters] = useState(false);
 
     const { addToast } = useToasts();
     const eventsInitialized = useRef(false);
@@ -164,7 +169,6 @@ function AppContent() {
             const q = query(collection(db, eventsPath));
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 if (!eventsInitialized.current) {
-                    // Don't show toasts for the initial data load
                     eventsInitialized.current = true;
                     return;
                 }
@@ -209,17 +213,56 @@ function AppContent() {
         setEvents([]);
     };
 
-    const filteredContainers = useMemo(() => {
-        const source = pageView === 'live' ? containers : archivedContainers;
-        if (!searchTerm) return source;
-        return source.filter(c => 
-            c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.booking?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.truck?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.deliveryDriver?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.bookedFor?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [containers, archivedContainers, searchTerm, pageView]);
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
+    };
+
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    // --- Main Filtering and Sorting Logic ---
+    const processedContainers = useMemo(() => {
+        let sourceData = pageView === 'live' ? containers : archivedContainers;
+
+        // 1. Filtering
+        let filtered = sourceData.filter(c => {
+            const searchMatch = !searchTerm ||
+                c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.booking?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.truck?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.deliveryDriver?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.bookedFor?.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const statusMatch = !filters.status || c.status === filters.status;
+            const typeMatch = !filters.bookedFor || c.bookedFor === filters.bookedFor;
+            
+            return searchMatch && statusMatch && typeMatch;
+        });
+
+        // 2. Sorting
+        if (sortConfig.key) {
+            filtered.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+
+        return filtered;
+    }, [containers, archivedContainers, searchTerm, pageView, filters, sortConfig]);
 
     const renderMainContent = () => {
         if (pageView === 'reports') {
@@ -228,25 +271,65 @@ function AppContent() {
         
         return (
             <>
-                <div className="mb-4 flex flex-col sm:flex-row gap-4">
-                    <input
-                        type="text"
-                        placeholder="Search by Container #, Booking, Truck..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full p-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                     <div className="flex-shrink-0 bg-gray-800 border border-gray-700 rounded-lg p-1 flex">
-                        <button onClick={() => setView('card')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'card' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Card</button>
-                        <button onClick={() => setView('grid')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Grid</button>
+                {/* Search, View, and Filter Bar */}
+                <div className="mb-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <input
+                            type="text"
+                            placeholder="Search by Container #, Booking, Truck..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full p-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                             <div className="bg-gray-800 border border-gray-700 rounded-lg p-1 flex">
+                                <button onClick={() => setView('card')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'card' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Card</button>
+                                <button onClick={() => setView('grid')} className={`px-4 py-2 text-sm font-semibold rounded-md ${view === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}>Grid</button>
+                            </div>
+                            <button onClick={() => setShowFilters(!showFilters)} className="p-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700">
+                                <FilterIcon />
+                            </button>
+                        </div>
                     </div>
+                    {/* Collapsible Filter and Sort Section */}
+                    {showFilters && (
+                        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-end">
+                            {/* Filter Dropdowns */}
+                            <div className="flex-grow w-full">
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Filter by Status</label>
+                                <select name="status" value={filters.status} onChange={handleFilterChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none">
+                                    <option value="">All Statuses</option>
+                                    {CONTAINER_STATUSES.map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
+                                </select>
+                            </div>
+                             <div className="flex-grow w-full">
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Filter by Type</label>
+                                <select name="bookedFor" value={filters.bookedFor} onChange={handleFilterChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none">
+                                    <option value="">All Types</option>
+                                    {collectionsData.containerTypes.map(t => <option key={t.docId} value={t.name}>{t.name}</option>)}
+                                </select>
+                            </div>
+                            {/* Sort Buttons */}
+                            <div className="flex-shrink-0">
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Sort by</label>
+                                 <div className="flex gap-2">
+                                     <button onClick={() => requestSort('lastUpdate')} className={`flex items-center p-2 rounded-md ${sortConfig.key === 'lastUpdate' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                                         Last Update {sortConfig.key === 'lastUpdate' && (sortConfig.direction === 'ascending' ? <SortAscIcon/> : <SortDescIcon/>)}
+                                     </button>
+                                     <button onClick={() => requestSort('id')} className={`flex items-center p-2 rounded-md ${sortConfig.key === 'id' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                                         Container # {sortConfig.key === 'id' && (sortConfig.direction === 'ascending' ? <SortAscIcon/> : <SortDescIcon/>)}
+                                     </button>
+                                 </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {loading ? (
                     <div className="text-center py-10">Loading...</div>
                 ) : view === 'card' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredContainers.map((container) => (
+                        {processedContainers.map((container) => (
                             <ContainerCard 
                                 key={container.id} 
                                 container={container} 
@@ -258,7 +341,7 @@ function AppContent() {
                     </div>
                 ) : (
                     <GridContainerView 
-                        containers={filteredContainers}
+                        containers={processedContainers}
                         collections={collectionsData}
                         onEdit={handleOpenModal}
                         isArchived={pageView === 'archive'}
