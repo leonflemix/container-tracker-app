@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'fi
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -38,6 +38,7 @@ function AppContent() {
     const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
+    // State for sorting and filtering, now initialized from localStorage
     const [sortConfig, setSortConfig] = useState(() => {
         const savedSort = localStorage.getItem('containerTrackerSort');
         return savedSort ? JSON.parse(savedSort) : { key: 'lastUpdate', direction: 'descending' };
@@ -465,6 +466,13 @@ function AppContent() {
                         >
                             <TruckIcon />
                             Live Yard
+                        </button>
+                        <button
+                            onClick={() => setPageView('archive')}
+                            className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <ArchiveIcon />
+                            Archive
                         </button>
                         <button
                             onClick={() => setPageView('reports')}
