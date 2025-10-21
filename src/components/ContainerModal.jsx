@@ -16,6 +16,7 @@ import InputField from './InputField';
 import CheckboxField from './CheckboxField';
 import ConfirmationModal from './ConfirmationModal';
 import { CONTAINER_STATUSES } from '../constants';
+import { UndoIcon } from '../icons';
 
 export default function ContainerModal({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath, isArchived, addToast }) {
     const isNew = !container;
@@ -42,6 +43,7 @@ export default function ContainerModal({ container, events, onClose, bookings, c
     const [selectedDriver, setSelectedDriver] = useState('');
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [denialStep, setDenialStep] = useState(null); // 'choose'
+    const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
 
 
     const isAtLocation = useMemo(() => {
@@ -286,6 +288,33 @@ export default function ContainerModal({ container, events, onClose, bookings, c
         }
     };
 
+    const handleRevive = async () => {
+        if (!container) return;
+        setIsSaving(true);
+        const batch = writeBatch(db);
+        const liveRef = doc(db, containersPath, container.id);
+        const archiveRef = doc(db, archivePath, container.id);
+        
+        const revivedData = { ...container, status: 'New', lastUpdate: Timestamp.now() };
+        delete revivedData.archivedAt;
+
+        try {
+            batch.set(liveRef, revivedData);
+            batch.delete(archiveRef);
+            const eventData = { containerId: container.id, timestamp: Timestamp.now(), details: { action: 'Container Revived from Archive' } };
+            batch.set(doc(collection(db, eventsPath)), eventData);
+            
+            await batch.commit();
+            addToast(`Container ${container.id} has been revived and moved back to the live yard.`, 'success');
+            onClose();
+        } catch (error) {
+            console.error("Error reviving container:", error);
+            addToast("Failed to revive container.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) {
             return bookings.find(b => b.id === formData.booking)?.type || null;
@@ -315,7 +344,15 @@ export default function ContainerModal({ container, events, onClose, bookings, c
                            }
                            return null;
                         })}
-                         <div className="pt-4 flex justify-end gap-3">
+                         <div className="pt-4 flex justify-between items-center gap-3">
+                             <button 
+                                onClick={() => setReviveConfirmOpen(true)}
+                                disabled={isSaving}
+                                className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md"
+                            >
+                                <UndoIcon />
+                                Revive Container
+                            </button>
                             <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
                          </div>
                     </div>
@@ -568,6 +605,15 @@ export default function ContainerModal({ container, events, onClose, bookings, c
                         message={`Are you sure you want to permanently delete container ${container?.id}? This will also delete all of its event history.`}
                         onConfirm={handleDelete}
                         onCancel={() => setDeleteConfirmOpen(false)}
+                    />
+                )}
+                {isReviveConfirmOpen && (
+                    <ConfirmationModal
+                        message={`Are you sure you want to revive container ${container?.id} and move it back to the live yard?`}
+                        onConfirm={handleRevive}
+                        onCancel={() => setReviveConfirmOpen(false)}
+                        confirmText="Revive"
+                        confirmBg="bg-green-600 hover:bg-green-700"
                     />
                 )}
             </div>
