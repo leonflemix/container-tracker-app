@@ -1,11 +1,11 @@
 // File: src/components/CollectionsModal.jsx
+
 import React, { useState } from 'react';
 import { db } from '../firebase';
 import { collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import TabButton from './TabButton';
 import CollectionManager from './CollectionManager';
 
-export default function CollectionsModal({ onClose, paths, collectionsData }) {
+export default function CollectionsModal({ onClose, paths, collectionsData, addToast }) {
     const [activeTab, setActiveTab] = useState('drivers');
 
     const handleSave = async (collectionName, data, isNew) => {
@@ -15,13 +15,21 @@ export default function CollectionsModal({ onClose, paths, collectionsData }) {
         delete dataToSave.docId;
         try {
             await setDoc(docRef, dataToSave, { merge: !isNew });
-        } catch (error) { console.error(`Error saving to ${collectionName}:`, error); }
+            addToast(`${collectionName.slice(0, -1)} item saved successfully!`, 'success');
+        } catch (error) { 
+            console.error(`Error saving to ${collectionName}:`, error); 
+            addToast(`Failed to save item in ${collectionName}.`, 'error');
+        }
     };
     
     const handleDelete = async (collectionName, docId) => {
         try {
             await deleteDoc(doc(db, paths[collectionName], docId));
-        } catch (error) { console.error(`Error deleting from ${collectionName}:`, error); }
+            addToast(`${collectionName.slice(0, -1)} item deleted successfully!`, 'success');
+        } catch (error) { 
+            console.error(`Error deleting from ${collectionName}:`, error);
+            addToast(`Failed to delete item from ${collectionName}.`, 'error');
+        }
     };
     
     return (
@@ -49,3 +57,4 @@ export default function CollectionsModal({ onClose, paths, collectionsData }) {
         </div>
     );
 }
+

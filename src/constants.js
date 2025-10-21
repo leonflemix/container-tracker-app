@@ -1,3 +1,5 @@
+// File: src/constants.js
+
 export const CONTAINER_STATUSES = [
     { emoji: '🆕', label: 'New', isUpdateOption: false, isDispatchOption: false },
     { emoji: '🏞️', label: 'In Yard', isUpdateOption: false, isDispatchOption: false },

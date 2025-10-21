@@ -1,5 +1,4 @@
 // File: src/components/Toast.jsx
-// Location: src/components
 
 import React, { useEffect, useState } from 'react';
 
@@ -50,3 +49,4 @@ export default function Toast({ message, type, onDismiss }) {
     </div>
   );
 }
+

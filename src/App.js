@@ -1,7 +1,6 @@
-// File: src/container-tracker-app.jsx (or src/App.js)
-// Location: In the 'src' directory of your React project.
+// File: src/App.js
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -14,9 +13,10 @@ import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
 import InputField from './components/InputField';
+import { ToastProvider, useToasts } from './hooks/useToasts';
 
-// Main App Component
-export default function App() {
+// Main App Component Content
+function AppContent() {
     const [user, setUser] = useState(null);
     const [containers, setContainers] = useState([]);
     const [archivedContainers, setArchivedContainers] = useState([]);
@@ -36,6 +36,9 @@ export default function App() {
     const [searchTerm, setSearchTerm] = useState('');
     const [pageView, setPageView] = useState('live'); // 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
+
+    const { addToast } = useToasts();
+    const eventsInitialized = useRef(false);
 
     // --- Save view preference ---
     useEffect(() => {
@@ -76,7 +79,6 @@ export default function App() {
                 setUser(currentUser);
             } else {
                 try {
-                    // This logic handles both custom tokens (from your test environment) and standard anonymous sign-in.
                     const initialAuthToken = (typeof window !== 'undefined' && typeof window.__initial_auth_token !== 'undefined') ? window.__initial_auth_token : null;
                     if (initialAuthToken) {
                         await signInWithCustomToken(auth, initialAuthToken);
@@ -123,7 +125,6 @@ export default function App() {
         }
     }, [user, containersPath]);
     
-    // Fetch Archived Containers
     useEffect(() => {
         if (user) {
             const q = query(collection(db, archivePath));
@@ -141,7 +142,6 @@ export default function App() {
         }
     }, [user, archivePath]);
 
-    // Fetch bookings
     useEffect(() => {
         if (user) {
             const q = query(collection(db, bookingsPath));
@@ -157,6 +157,27 @@ export default function App() {
             return () => unsubscribe();
         }
     }, [user, bookingsPath]);
+
+    // Fetch ALL events to show real-time toasts
+    useEffect(() => {
+        if (user) {
+            const q = query(collection(db, eventsPath));
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                if (!eventsInitialized.current) {
+                    // Don't show toasts for the initial data load
+                    eventsInitialized.current = true;
+                    return;
+                }
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added") {
+                        const newEvent = change.doc.data();
+                        addToast(`${newEvent.details.action} for container ${newEvent.containerId}`, 'info');
+                    }
+                });
+            });
+            return () => unsubscribe();
+        }
+    }, [user, eventsPath, addToast]);
 
     // Fetch events for selected container
     useEffect(() => {
@@ -188,7 +209,6 @@ export default function App() {
         setEvents([]);
     };
 
-    // Filter containers based on search term
     const filteredContainers = useMemo(() => {
         const source = pageView === 'live' ? containers : archivedContainers;
         if (!searchTerm) return source;
@@ -312,6 +332,7 @@ export default function App() {
                     eventsPath={eventsPath}
                     archivePath={archivePath}
                     isArchived={pageView === 'archive'}
+                    addToast={addToast}
                 />
             )}
             {isBookingModalOpen && (
@@ -322,6 +343,7 @@ export default function App() {
                     archivedContainers={archivedContainers}
                     bookingsPath={bookingsPath}
                     containerTypes={collectionsData.containerTypes}
+                    addToast={addToast}
                 />
             )}
             {isCollectionsModalOpen && (
@@ -329,9 +351,19 @@ export default function App() {
                     onClose={() => setIsCollectionsModalOpen(false)}
                     paths={collectionsPaths}
                     collectionsData={collectionsData}
+                    addToast={addToast}
                 />
             )}
         </div>
+    );
+}
+
+// Wrap AppContent with the provider
+export default function App() {
+    return (
+        <ToastProvider>
+            <AppContent />
+        </ToastProvider>
     );
 }
 

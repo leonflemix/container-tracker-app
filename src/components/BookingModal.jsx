@@ -1,10 +1,11 @@
 // File: src/components/BookingModal.jsx
+
 import React, { useMemo, useState } from 'react';
 import { db, Timestamp } from '../firebase';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
 
-export default function BookingModal({ onClose, bookings, containers, archivedContainers, bookingsPath, containerTypes }) {
+export default function BookingModal({ onClose, bookings, containers, archivedContainers, bookingsPath, containerTypes, addToast }) {
     const [isAdding, setIsAdding] = useState(false);
     const [formData, setFormData] = useState({
         id: '',
@@ -33,7 +34,7 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.id || !formData.quantity || !formData.type) {
-            alert("All fields are required.");
+            addToast("All fields are required.", 'error');
             return;
         }
         setIsSaving(true);
@@ -46,13 +47,20 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
 
         try {
             await setDoc(bookingRef, dataToSave);
+            addToast(`Booking ${dataToSave.id} saved successfully!`, 'success');
             setIsAdding(false);
+            setFormData({ id: '', quantity: 1, type: '' }); // Clear form
         } catch (error) {
             console.error("Error saving booking:", error);
-            alert("Failed to save booking. See console for details.");
+            addToast("Failed to save booking. See console for details.", 'error');
         } finally {
             setIsSaving(false);
         }
+    };
+    
+    const getTypeColor = (typeName) => {
+        const typeInfo = containerTypes.find(t => t.name === typeName);
+        return typeInfo?.color || 'inherit';
     };
 
     return (
@@ -97,23 +105,18 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
                     ) : (
                         <div>
                             <div className="space-y-3 mb-4">
-                                {bookings.map(booking => {
-                                    const typeInfo = containerTypes.find(t => t.name === booking.type);
-                                    return (
-                                        <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
-                                            <div>
-                                                <p className="font-bold text-white">{booking.id}</p>
-                                                <p className="text-sm font-semibold" style={{ color: typeInfo?.color || 'inherit' }}>
-                                                    {booking.type}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-lg font-semibold text-white">{filledCounts[booking.id] || 0} / {booking.quantity}</p>
-                                                <p className="text-xs text-gray-400">Filled</p>
-                                            </div>
+                                {bookings.map(booking => (
+                                    <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
+                                        <div>
+                                            <p className="font-bold text-white">{booking.id}</p>
+                                            <p className="text-sm font-semibold" style={{ color: getTypeColor(booking.type) }}>{booking.type}</p>
                                         </div>
-                                    );
-                                })}
+                                        <div className="text-right">
+                                            <p className="text-lg font-semibold text-white">{filledCounts[booking.id] || 0} / {booking.quantity}</p>
+                                            <p className="text-xs text-gray-400">Filled</p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                             <div className="flex justify-end gap-3">
                                  <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
@@ -128,3 +131,4 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
         </div>
     );
 }
+

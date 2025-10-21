@@ -1,3 +1,5 @@
+// File: src/components/ConfirmationModal.jsx
+
 import React from 'react';
 export default function ConfirmationModal({ message, onConfirm, onCancel }) {
     return (

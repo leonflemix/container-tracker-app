@@ -1,5 +1,4 @@
 // File: src/components/ContainerModal.jsx
-// Location: src/components
 
 import React, { useMemo, useState } from 'react';
 import { db, Timestamp } from '../firebase';
@@ -18,11 +17,9 @@ import InputField from './InputField';
 import CheckboxField from './CheckboxField';
 import ConfirmationModal from './ConfirmationModal';
 import { CONTAINER_STATUSES } from '../constants';
-import { useToasts } from '../hooks/useToasts'; // Import the hook
 
-export default function ContainerModal({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath, isArchived }) {
+export default function ContainerModal({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath, isArchived, addToast }) {
     const isNew = !container;
-    const { addToast } = useToasts(); // Use the hook
     const [formData, setFormData] = useState(
         isNew 
         ? { id: '', tareWeight: 0, booking: '' }
@@ -41,7 +38,6 @@ export default function ContainerModal({ container, events, onClose, bookings, c
             hasHolesAfterSquish: container?.hasHolesAfterSquish || false,
         }
     );
-    // ... (rest of state declarations)
     const [isSaving, setIsSaving] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState('');
     const [selectedDriver, setSelectedDriver] = useState('');
@@ -116,9 +112,6 @@ export default function ContainerModal({ container, events, onClose, bookings, c
         } finally { setIsSaving(false); }
     };
     
-    // ... (other handlers like handleLocationSubmit, handleAssignDriver, etc.)
-    // Add addToast calls to their try/catch blocks as well.
-    // For example, in handleDelete:
     const handleDelete = async () => {
         if (!container) return;
         try {
@@ -135,10 +128,7 @@ export default function ContainerModal({ container, events, onClose, bookings, c
             addToast("Failed to delete container.", 'error');
         }
     };
-    // ... (rest of the component, renderContent, etc.)
-    // The visual part of the modal does not need to change.
-    // ...
-    // ... (rest of the component is unchanged)
+    
     const handleLocationSubmit = async (e) => {
         e.preventDefault();
         if (!selectedLocation) { addToast("Please select a location.", 'error'); return; }
@@ -174,7 +164,6 @@ export default function ContainerModal({ container, events, onClose, bookings, c
         } finally { setIsSaving(false); }
     };
     
-    // ... (rest of the component) ...
     const handleAssignDriver = async (e) => {
         e.preventDefault();
         if (!selectedDriver) { addToast("Please select a driver to assign.", 'error'); return; }
@@ -443,11 +432,24 @@ export default function ContainerModal({ container, events, onClose, bookings, c
             );
         }
 
+        const typeInfo = collections.containerTypes.find(t => t.name === formData.bookedFor);
+        const typeColor = typeInfo?.color || '#6B7280'; // gray-500 default
+
         return (
             <div className="flex flex-col lg:flex-row">
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
                     <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Container Type</label>
+                        <div className="w-full p-2 bg-gray-600 text-white rounded-md border border-gray-600 flex items-center cursor-not-allowed">
+                            <span 
+                                style={{ backgroundColor: typeColor }} 
+                                className="w-4 h-4 rounded-full mr-2 border border-gray-400"
+                            ></span>
+                            {formData.bookedFor}
+                        </div>
+                    </div>
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
@@ -532,3 +534,4 @@ export default function ContainerModal({ container, events, onClose, bookings, c
         </div>
     );
 }
+
