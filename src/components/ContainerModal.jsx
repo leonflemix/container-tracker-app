@@ -1,5 +1,5 @@
 // File: src/components/ContainerModal.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { db, Timestamp } from '../firebase';
 import {
     collection,
@@ -15,7 +15,7 @@ import {
 import InputField from './InputField';
 import CheckboxField from './CheckboxField';
 import ConfirmationModal from './ConfirmationModal';
-import CameraScanner from './CameraScanner'; // Import the new component
+import CameraScanner from './CameraScanner';
 import { CONTAINER_STATUSES } from '../constants';
 import { UndoIcon, CameraIcon } from '../icons';
 
@@ -34,7 +34,8 @@ export default function ContainerModal({
     archivedBookingsPath,
     filledBookingCounts,
     allContainers,
-    allArchivedContainers
+    allArchivedContainers,
+    preselectedBooking
 }) {
     const isNew = !container;
     const [formData, setFormData] = useState(
@@ -62,6 +63,13 @@ export default function ContainerModal({
     const [denialStep, setDenialStep] = useState(null); // 'choose'
     const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+    // Pre-select booking if passed as a prop
+    useEffect(() => {
+        if (isNew && preselectedBooking) {
+            setFormData(prev => ({ ...prev, booking: preselectedBooking }));
+        }
+    }, [isNew, preselectedBooking]);
 
 
     const isAtLocation = useMemo(() => {

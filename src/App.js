@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'fi
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon, CameraIcon } from './icons';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon, CameraIcon, PencilIcon, PlusCircleIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -34,6 +34,7 @@ function AppContent() {
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
     const [selectedContainer, setSelectedContainer] = useState(null);
+    const [preselectedBooking, setPreselectedBooking] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', or 'reports'
@@ -303,7 +304,7 @@ function AppContent() {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setSelectedContainer(null);
-        setEvents([]);
+        setPreselectedBooking(null); // Clear preselection on close
     };
 
     const handleFilterChange = (e) => {
@@ -322,6 +323,12 @@ function AppContent() {
     const handleContainerSelectFromDashboard = (container) => {
         setPageView('live');
         handleOpenModal(container);
+    };
+
+    const handleSelectBookingForContainerAdd = (bookingId) => {
+        setPreselectedBooking(bookingId);
+        setIsBookingModalOpen(false);
+        handleOpenModal(null); // Open container modal for a new container
     };
 
     // --- Main Filtering and Sorting Logic ---
@@ -566,6 +573,7 @@ function AppContent() {
                     filledBookingCounts={filledBookingCounts}
                     allContainers={containers}
                     allArchivedContainers={archivedContainers}
+                    preselectedBooking={preselectedBooking}
                 />
             )}
             {isBookingModalOpen && (
@@ -576,6 +584,7 @@ function AppContent() {
                     bookingsPath={bookingsPath}
                     containerTypes={collectionsData.containerTypes}
                     addToast={addToast}
+                    onSelectBookingForContainerAdd={handleSelectBookingForContainerAdd}
                 />
             )}
             {isCollectionsModalOpen && (

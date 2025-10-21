@@ -3,9 +3,9 @@ import React, { useState } from 'react';
 import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
-import { PencilIcon } from '../icons';
+import { PencilIcon, PlusCircleIcon } from '../icons';
 
-export default function BookingModal({ onClose, openBookings, filledBookingCounts, bookingsPath, containerTypes, addToast }) {
+export default function BookingModal({ onClose, openBookings, filledBookingCounts, bookingsPath, containerTypes, addToast, onSelectBookingForContainerAdd }) {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null); // null for new, object for edit
     const [formData, setFormData] = useState({
@@ -123,13 +123,16 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
                                             <p className="font-bold text-white">{booking.id}</p>
                                             <p className="text-sm text-gray-400">{booking.type}</p>
                                         </div>
-                                        <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2">
                                             <div className="text-right">
                                                 <p className="text-lg font-semibold text-white">{filledBookingCounts[booking.id] || 0} / {booking.quantity}</p>
                                                 <p className="text-xs text-gray-400">Filled</p>
                                             </div>
-                                            <button onClick={() => openForm(booking)} className="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-600 rounded-full">
+                                            <button onClick={() => openForm(booking)} className="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-600 rounded-full" title="Edit Booking">
                                                 <PencilIcon />
+                                            </button>
+                                            <button onClick={() => onSelectBookingForContainerAdd(booking.id)} className="p-2 text-green-400 hover:text-green-300 hover:bg-gray-600 rounded-full" title="Add Container for this Booking">
+                                                <PlusCircleIcon />
                                             </button>
                                         </div>
                                     </div>
