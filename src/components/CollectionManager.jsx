@@ -1,5 +1,4 @@
 // File: src/components/CollectionManager.jsx
-
 import React, { useState } from 'react';
 import CollectionForm from './CollectionForm';
 import ConfirmationModal from './ConfirmationModal';
@@ -85,3 +84,4 @@ export default function CollectionManager({ collectionName, data = [], onSave, o
         </div>
     );
 }
+

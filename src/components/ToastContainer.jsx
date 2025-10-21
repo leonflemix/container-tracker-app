@@ -1,4 +1,5 @@
 // File: src/components/ToastContainer.jsx
+// Location: src/components
 
 import React from 'react';
 import Toast from './Toast';

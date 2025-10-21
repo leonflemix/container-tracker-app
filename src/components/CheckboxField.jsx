@@ -1,5 +1,4 @@
 // File: src/components/CheckboxField.jsx
-
 import React from 'react';
 export default function CheckboxField({ label, name, checked, onChange }) {
     return (
@@ -15,3 +14,4 @@ export default function CheckboxField({ label, name, checked, onChange }) {
         </label>
     );
 }
+

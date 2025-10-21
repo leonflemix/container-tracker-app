@@ -1,4 +1,5 @@
 // File: src/components/Toast.jsx
+// Location: src/components
 
 import React, { useEffect, useState } from 'react';
 

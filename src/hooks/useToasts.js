@@ -1,4 +1,5 @@
 // File: src/hooks/useToasts.js
+// Location: src/hooks
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import ToastContainer from '../components/ToastContainer';
