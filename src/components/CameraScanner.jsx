@@ -1,64 +1,79 @@
 // File: src/components/CameraScanner.jsx
 // Location: src/components
 
-import React, { useState, useRef, useEffect } from 'react';
+/* global Tesseract */
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useToasts } from '../hooks/useToasts';
+import { CameraIcon } from '../icons';
 
 export default function CameraScanner({ onScanComplete, onCancel }) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
-    const [isScanning, setIsScanning] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [stream, setStream] = useState(null);
     const { addToast } = useToasts();
 
-    useEffect(() => {
-        const startCamera = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' } // Prefer the rear camera
-                });
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                }
-            } catch (err) {
-                console.error("Error accessing camera:", err);
-                addToast('Could not access camera. Please check permissions.', 'error');
-                onCancel();
-            }
-        };
+    const startCamera = useCallback(async () => {
+        // Check for HTTPS connection which is required for camera access on mobile
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            addToast('Camera access requires a secure (HTTPS) connection.', 'error');
+            onCancel();
+            return;
+        }
 
-        startCamera();
-
-        return () => {
-            if (videoRef.current && videoRef.current.srcObject) {
-                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        try {
+            const mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' } // Prefer the rear camera
+            });
+            setStream(mediaStream);
+            if (videoRef.current) {
+                videoRef.current.srcObject = mediaStream;
             }
-        };
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            addToast('Could not access camera. Please check permissions.', 'error');
+            onCancel();
+        }
     }, [addToast, onCancel]);
+    
+    // Cleanup function to stop the camera stream when the component unmounts
+    useEffect(() => {
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [stream]);
 
     const handleCapture = async () => {
-        if (!videoRef.current) return;
+        if (!videoRef.current || !stream) {
+            addToast('Camera stream not available.', 'error');
+            return;
+        }
+
+        // Add a check to ensure the Tesseract script has loaded onto the window object.
+        if (typeof window.Tesseract === 'undefined') {
+            addToast("OCR script is still loading. Please wait a moment and try again.", 'error');
+            return;
+        }
+
         setIsLoading(true);
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
 
-        // Set canvas dimensions to match the video
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
 
-        // Draw the current video frame onto the canvas
         context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
         
-        // Use Tesseract to recognize text from the canvas image
         try {
-            const { data: { text } } = await Tesseract.recognize(
+            // Explicitly use window.Tesseract to avoid build errors.
+            const { data: { text } } = await window.Tesseract.recognize(
                 canvas,
                 'eng',
-                {
-                    logger: m => console.log(m) // Optional: log progress
-                }
+                { logger: m => console.log(m) }
             );
             onScanComplete(text);
         } catch (error) {
@@ -68,6 +83,26 @@ export default function CameraScanner({ onScanComplete, onCancel }) {
             setIsLoading(false);
         }
     };
+    
+    if (!stream) {
+        return (
+             <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col justify-center items-center z-[60] p-4">
+                <div className="text-center">
+                    <p className="text-white mb-4">Camera access is required to scan.</p>
+                    <button 
+                        onClick={startCamera}
+                        className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg"
+                    >
+                        <CameraIcon />
+                        Start Camera
+                    </button>
+                     <button onClick={onCancel} className="mt-4 py-2 px-6 bg-gray-600 hover:bg-gray-700 rounded-lg text-white">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex flex-col justify-center items-center z-[60] p-4">
@@ -96,3 +131,4 @@ export default function CameraScanner({ onScanComplete, onCancel }) {
         </div>
     );
 }
+
