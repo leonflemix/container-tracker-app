@@ -87,14 +87,14 @@ export default function ContainerModal({
     const processOcrText = (text) => {
         console.log("Scanned Text:", text);
 
-        // More robust Regex for container number (handles spaces and newlines between parts)
-        const containerIdMatch = text.match(/([A-Z]{4})\s*(\d{6,7})/);
-        // More robust Regex for TARE weight, looking for the numbers preceding KGS
-        const tareMatch = text.match(/TARE[\s\S]*?(\d{1,3}[,.]?\d{3})\s*KGS/i);
+        // More robust Regex to handle the check digit (e.g., MSDU 287641 4)
+        const containerIdMatch = text.match(/([A-Z]{4})\s*(\d{6})\s*(\d)/);
+        // More robust Regex for TARE weight, looking for numbers before KGS (e.g., 2.100 KGS)
+        const tareMatch = text.match(/TARE[\s\S]*?(\d{1,3}[.,]?\d{3})\s*KGS/i);
 
         let foundId = false;
-        if (containerIdMatch && containerIdMatch[1] && containerIdMatch[2]) {
-            const id = `${containerIdMatch[1]}${containerIdMatch[2]}`;
+        if (containerIdMatch && containerIdMatch[1] && containerIdMatch[2] && containerIdMatch[3]) {
+            const id = `${containerIdMatch[1]}${containerIdMatch[2]}${containerIdMatch[3]}`;
             setFormData(prev => ({ ...prev, id }));
             addToast(`Found Container ID: ${id}`, 'success');
             foundId = true;
@@ -104,7 +104,7 @@ export default function ContainerModal({
 
         let foundTare = false;
         if (tareMatch && tareMatch[1]) {
-            const tareWeight = parseInt(tareMatch[1].replace(/[,.]/g, ''), 10);
+            const tareWeight = parseInt(tareMatch[1].replace(/[.,]/g, ''), 10);
             setFormData(prev => ({ ...prev, tareWeight }));
             addToast(`Found Tare Weight: ${tareWeight} KGS`, 'success');
             foundTare = true;
