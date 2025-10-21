@@ -37,10 +37,10 @@ function AppContent() {
     const [pageView, setPageView] = useState('live'); // 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card'); // 'card' or 'grid'
     
-    // New state for sorting and filtering
     const [sortConfig, setSortConfig] = useState({ key: 'lastUpdate', direction: 'descending' });
     const [filters, setFilters] = useState({ status: '', bookedFor: '' });
     const [showFilters, setShowFilters] = useState(false);
+    const [recentlyUpdated, setRecentlyUpdated] = useState([]); // State for highlights
 
     const { addToast } = useToasts();
     const eventsInitialized = useRef(false);
@@ -110,17 +110,44 @@ function AppContent() {
         }
     }, [user, collectionsPaths]);
 
+    // Container listener with highlight logic
     useEffect(() => {
         if (user) {
             setLoading(true);
             const q = query(collection(db, containersPath));
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const containersData = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    lastUpdate: doc.data().lastUpdate?.toDate()
-                }));
-                setContainers(containersData);
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                const containersData = [];
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === "added" || change.type === "modified") {
+                        containersData.push({
+                            id: change.doc.id,
+                            ...change.doc.data(),
+                            lastUpdate: change.doc.data().lastUpdate?.toDate()
+                        });
+                        if (change.type === "modified") {
+                            const containerId = change.doc.id;
+                            setRecentlyUpdated(prev => [...prev, containerId]);
+                            setTimeout(() => {
+                                setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
+                            }, 3000); // Highlight duration
+                        }
+                    }
+                });
+                
+                // Update state based on changes
+                setContainers(prevContainers => {
+                    const newContainers = [...prevContainers];
+                    containersData.forEach(updatedContainer => {
+                        const index = newContainers.findIndex(c => c.id === updatedContainer.id);
+                        if (index > -1) {
+                            newContainers[index] = updatedContainer;
+                        } else {
+                            newContainers.push(updatedContainer);
+                        }
+                    });
+                    return newContainers.filter(c => !snapshot.docChanges().some(change => change.type === 'removed' && change.doc.id === c.id));
+                });
+
                 setLoading(false);
             }, (error) => {
                 console.error("Error fetching containers:", error);
@@ -339,6 +366,7 @@ function AppContent() {
                                 onSelect={handleOpenModal} 
                                 isArchived={pageView === 'archive'}
                                 containerTypes={collectionsData.containerTypes}
+                                recentlyUpdated={recentlyUpdated}
                             />
                         ))}
                     </div>
@@ -348,6 +376,7 @@ function AppContent() {
                         collections={collectionsData}
                         onEdit={handleOpenModal}
                         isArchived={pageView === 'archive'}
+                        recentlyUpdated={recentlyUpdated}
                     />
                 )}
             </>
@@ -356,6 +385,18 @@ function AppContent() {
 
     return (
         <div className="bg-gray-900 text-gray-100 min-h-screen font-sans">
+            <style>
+                {`
+                    @keyframes highlight-animation {
+                        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+                    }
+                    .highlight-update {
+                        animation: highlight-animation 1.5s ease-out;
+                    }
+                `}
+            </style>
             <div className="container mx-auto p-4">
                 <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
                     <div className="flex items-center mb-4 sm:mb-0">

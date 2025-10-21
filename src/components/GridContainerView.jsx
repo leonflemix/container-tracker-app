@@ -3,7 +3,7 @@
 import React from 'react';
 import { CONTAINER_STATUSES } from '../constants';
 
-export default function GridContainerView({ containers, onEdit, isArchived, collections }) {
+export default function GridContainerView({ containers, onEdit, isArchived, collections, recentlyUpdated = [] }) {
     return (
         <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
             <table className="min-w-full text-sm text-left text-gray-300">
@@ -31,9 +31,10 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
 
                         const typeInfo = collections.containerTypes.find(t => t.name === container.bookedFor);
                         const typeColor = typeInfo?.color || 'inherit';
+                        const isHighlighted = recentlyUpdated.includes(container.id);
 
                         return (
-                            <tr key={container.id} className="hover:bg-gray-700">
+                            <tr key={container.id} className={`hover:bg-gray-700 ${isHighlighted ? 'highlight-update' : ''}`}>
                                 <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{container.id}</td>
                                 <td className="px-6 py-4 whitespace-nowrap"><span className="mr-2">{statusInfo.emoji}</span>{statusInfo.label}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{container.booking || 'N/A'}</td>
@@ -60,3 +61,4 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
         </div>
     );
 }
+

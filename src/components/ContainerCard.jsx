@@ -3,7 +3,7 @@
 import React from 'react';
 import { CONTAINER_STATUSES } from '../constants';
 
-export default function ContainerCard({ container, onSelect, isArchived, containerTypes = [] }) {
+export default function ContainerCard({ container, onSelect, isArchived, containerTypes = [], recentlyUpdated = [] }) {
     let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
     if (container.status && container.status.startsWith('Assigned to Driver')) {
         statusInfo = { emoji: '👨‍✈️', label: container.status };
@@ -15,10 +15,12 @@ export default function ContainerCard({ container, onSelect, isArchived, contain
     const typeInfo = containerTypes.find(t => t.name === container.bookedFor);
     const typeColor = typeInfo?.color || 'inherit';
 
+    const isHighlighted = recentlyUpdated.includes(container.id);
+
     return (
         <div 
             onClick={() => onSelect(container)}
-            className={`bg-gray-800 p-4 rounded-lg shadow-lg border-2 ${isArchived ? 'border-gray-600 cursor-default' : 'cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-transparent'}`}
+            className={`bg-gray-800 p-4 rounded-lg shadow-lg border-2 ${isArchived ? 'border-gray-600 cursor-default' : 'cursor-pointer transition-all duration-300 hover:shadow-blue-500/50 hover:border-blue-500 border-transparent'} ${isHighlighted ? 'highlight-update' : ''}`}
         >
             <div className="flex justify-between items-start">
                 <h3 className="text-lg font-bold text-blue-400 break-all">{container.id}</h3>
@@ -38,3 +40,4 @@ export default function ContainerCard({ container, onSelect, isArchived, contain
         </div>
     );
 }
+
