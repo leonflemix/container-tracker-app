@@ -1,5 +1,5 @@
 // File: src/components/ContainerModal.jsx
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { db, Timestamp } from '../firebase';
 import {
     collection,
@@ -17,7 +17,7 @@ import CheckboxField from './CheckboxField';
 import ConfirmationModal from './ConfirmationModal';
 import CameraScanner from './CameraScanner';
 import { CONTAINER_STATUSES } from '../constants';
-import { UndoIcon, CameraIcon } from '../icons';
+import { UndoIcon, CameraIcon, UploadIcon } from '../icons';
 
 export default function ContainerModal({ 
     container, 
@@ -46,6 +46,7 @@ export default function ContainerModal({
     const [denialStep, setDenialStep] = useState(null);
     const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         if (isNew) {
@@ -83,28 +84,65 @@ export default function ContainerModal({
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     };
 
-    const handleScanComplete = (text) => {
-        setIsScannerOpen(false);
+    const processOcrText = (text) => {
         console.log("Scanned Text:", text);
 
         const containerIdMatch = text.match(/[A-Z]{4}\s?\d+/);
         const tareMatch = text.match(/TARE[\s\S]*?(\d{1,3}(?:,?\d{3})*)\s*KGS/i);
 
-        let foundId = '';
+        let foundId = false;
         if (containerIdMatch) {
-            foundId = containerIdMatch[0].replace(/\s/g, '');
-            setFormData(prev => ({ ...prev, id: foundId }));
-            addToast(`Found Container ID: ${foundId}`, 'success');
+            const id = containerIdMatch[0].replace(/\s/g, '');
+            setFormData(prev => ({ ...prev, id }));
+            addToast(`Found Container ID: ${id}`, 'success');
+            foundId = true;
         } else {
             addToast('Could not find a valid Container ID.', 'error');
         }
 
+        let foundTare = false;
         if (tareMatch && tareMatch[1]) {
             const tareWeight = parseInt(tareMatch[1].replace(/,/g, ''), 10);
             setFormData(prev => ({ ...prev, tareWeight }));
             addToast(`Found Tare Weight: ${tareWeight} KGS`, 'success');
+            foundTare = true;
         } else {
             addToast('Could not find Tare Weight in KGS.', 'error');
+        }
+    };
+
+    const handleScanComplete = (text) => {
+        setIsScannerOpen(false);
+        processOcrText(text);
+    };
+
+    const handleImageUpload = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (typeof window.Tesseract === 'undefined') {
+            addToast("OCR script is still loading. Please wait a moment and try again.", 'error');
+            return;
+        }
+
+        setIsSaving(true);
+        addToast("Processing uploaded image...", 'info');
+
+        try {
+            const { data: { text } } = await window.Tesseract.recognize(
+                file,
+                'eng',
+                { logger: m => console.log(m) }
+            );
+            processOcrText(text);
+        } catch (error) {
+            console.error("OCR Error from upload:", error);
+            addToast("Could not recognize text from the uploaded image.", 'error');
+        } finally {
+            setIsSaving(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
         }
     };
 
@@ -465,6 +503,7 @@ export default function ContainerModal({
                 <>
                     {isScannerOpen && <CameraScanner onScanComplete={handleScanComplete} onCancel={() => setIsScannerOpen(false)} />}
                     <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                        <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
                         <div className="flex justify-between items-end gap-4">
                             <div className="flex-grow">
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Booking # *</label>
@@ -473,10 +512,14 @@ export default function ContainerModal({
                                     {openBookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
                                 </select>
                             </div>
-                            <button type="button" onClick={() => setIsScannerOpen(true)} className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
-                                <CameraIcon />
-                                Scan
-                            </button>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setIsScannerOpen(true)} className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">
+                                    <CameraIcon />
+                                </button>
+                                <button type="button" onClick={() => fileInputRef.current.click()} className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">
+                                    <UploadIcon />
+                                </button>
+                            </div>
                         </div>
 
                         {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
