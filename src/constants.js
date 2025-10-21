@@ -21,9 +21,11 @@ export const CONTAINER_STATUSES = [
     { emoji: '🚛', label: 'En Route to Pier', isUpdateOption: true, isDispatchOption: false },
     { emoji: '💨', label: 'Returned Empty', isUpdateOption: false, isDispatchOption: false },
     { emoji: 'Y', label: 'Pier Accepted', isUpdateOption: false, isDispatchOption: false },
-    { emoji: '🚫', label: 'Denied', isUpdateOption: false, isDispatchOption: false },
+    { emoji: '🚫', label: 'Denied', isUpdateOption: false, isDispatchOption: false }, // Kept for historical data
+    { emoji: '🚫', label: 'Denied - Awaiting Update', isUpdateOption: true, isDispatchOption: true },
     { emoji: '🛞', label: 'CHASSIS NEEDS REPAIR', isUpdateOption: true, isDispatchOption: true },
     { emoji: '📝', label: 'Docs Issue', isUpdateOption: false, isDispatchOption: false },
     { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true, isDispatchOption: false },
     { emoji: '👨‍✈️', label: 'Assigned to Driver', isUpdateOption: false, isDispatchOption: false },
 ];
+

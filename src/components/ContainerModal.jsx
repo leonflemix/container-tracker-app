@@ -1,5 +1,4 @@
 // File: src/components/ContainerModal.jsx
-
 import React, { useMemo, useState } from 'react';
 import { db, Timestamp } from '../firebase';
 import {
@@ -42,6 +41,7 @@ export default function ContainerModal({ container, events, onClose, bookings, c
     const [selectedLocation, setSelectedLocation] = useState('');
     const [selectedDriver, setSelectedDriver] = useState('');
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [denialStep, setDenialStep] = useState(null); // 'choose'
 
 
     const isAtLocation = useMemo(() => {
@@ -222,32 +222,68 @@ export default function ContainerModal({ container, events, onClose, bookings, c
     };
 
     const handlePierResponse = async (isAccepted) => {
-        setIsSaving(true);
-        const batch = writeBatch(db);
-        const containerRef = doc(db, containersPath, container.id);
-        try {
-            if (isAccepted) {
+        if (isAccepted) {
+            setIsSaving(true);
+            const batch = writeBatch(db);
+            const containerRef = doc(db, containersPath, container.id);
+            try {
                 const archiveRef = doc(db, archivePath, container.id);
                 const archivedData = { ...container, status: 'Pier Accepted', archivedAt: Timestamp.now() };
                 batch.set(archiveRef, archivedData);
                 batch.delete(containerRef);
-                const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Accepted & Archived', changes: `Status changed to 'Pier Accepted'. Container moved to archive.` } };
+                const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Accepted & Archived' } };
                 batch.set(doc(collection(db, eventsPath)), eventData);
-                 addToast('Container accepted by pier and archived.', 'success');
-            } else {
-                const newStatus = 'Denied';
-                const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
-                batch.update(containerRef, dataToUpdate);
-                const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Denied', changes: `Status changed to '${newStatus}'.` } };
-                batch.set(doc(collection(db, eventsPath)), eventData);
-                addToast('Container denied by pier.', 'success');
+                await batch.commit();
+                addToast('Container accepted by pier and archived.', 'success');
+                onClose();
+            } catch (error) {
+                console.error(`Error accepting pier status:`, error);
+                addToast("Failed to accept pier status.", 'error');
+            } finally {
+                setIsSaving(false);
             }
-            await batch.commit();
+        } else {
+            // Start the denial workflow
+            setDenialStep('choose');
+        }
+    };
+    
+    const handleReturnToTilter = async () => {
+        setIsSaving(true);
+        const containerRef = doc(db, containersPath, container.id);
+        const newStatus = 'New';
+        try {
+            const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
+            await setDoc(containerRef, dataToUpdate, { merge: true });
+            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Denied - Returned to Tilter/Location' } };
+            await addDoc(collection(db, eventsPath), eventData);
+            addToast('Container status reset to New.', 'success');
             onClose();
         } catch (error) {
-            console.error(`Error updating pier status:`, error);
-            addToast("Failed to update pier status.", 'error');
-        } finally { setIsSaving(false); }
+            console.error("Error returning container to tilter:", error);
+            addToast("Failed to reset container status.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const handleNeedsUpdatesAfterDenial = async () => {
+        setIsSaving(true);
+        const containerRef = doc(db, containersPath, container.id);
+        const newStatus = 'Denied - Awaiting Update';
+        try {
+            const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
+            await setDoc(containerRef, dataToUpdate, { merge: true });
+            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Denied - Awaiting Further Updates' } };
+            await addDoc(collection(db, eventsPath), eventData);
+            addToast('Container marked as "Denied - Awaiting Update".', 'success');
+            onClose();
+        } catch (error) {
+            console.error("Error setting container to awaiting update:", error);
+            addToast("Failed to update container status.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const selectedBookingType = useMemo(() => {
@@ -404,6 +440,23 @@ export default function ContainerModal({ container, events, onClose, bookings, c
 
         if (container.status && container.status.startsWith('Assigned to Driver')) {
             const driver = collections.drivers.find(d => d.name === container.deliveryDriver);
+            
+            if (denialStep === 'choose') {
+                return (
+                    <div className="p-6 text-center">
+                        <h3 className="text-lg font-semibold mb-4">What is the next step for this denied container?</h3>
+                        <div className="flex justify-center gap-4">
+                             <button onClick={handleReturnToTilter} disabled={isSaving} className="py-2 px-4 bg-orange-600 hover:bg-orange-500 rounded-lg">
+                                Return to Tilter/Location
+                            </button>
+                            <button onClick={handleNeedsUpdatesAfterDenial} disabled={isSaving} className="py-2 px-4 bg-indigo-600 hover:bg-indigo-500 rounded-lg">
+                                Needs Manual Update
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="p-6">
                     <div className="space-y-3 mb-6">
@@ -432,24 +485,11 @@ export default function ContainerModal({ container, events, onClose, bookings, c
             );
         }
 
-        const typeInfo = collections.containerTypes.find(t => t.name === formData.bookedFor);
-        const typeColor = typeInfo?.color || '#6B7280'; // gray-500 default
-
         return (
             <div className="flex flex-col lg:flex-row">
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
                     <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                    
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Container Type</label>
-                        <div className="w-full p-2 bg-gray-600 text-white rounded-md border border-gray-600 flex items-center cursor-not-allowed">
-                            <span 
-                                style={{ backgroundColor: typeColor }} 
-                                className="w-4 h-4 rounded-full mr-2 border border-gray-400"
-                            ></span>
-                            {formData.bookedFor}
-                        </div>
-                    </div>
+                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
