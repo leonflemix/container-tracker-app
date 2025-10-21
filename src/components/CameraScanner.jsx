@@ -26,9 +26,6 @@ export default function CameraScanner({ onScanComplete, onCancel }) {
                 video: { facingMode: 'environment' } // Prefer the rear camera
             });
             setStream(mediaStream);
-            if (videoRef.current) {
-                videoRef.current.srcObject = mediaStream;
-            }
         } catch (err) {
             console.error("Error accessing camera:", err);
             addToast('Could not access camera. Please check permissions.', 'error');
@@ -36,6 +33,13 @@ export default function CameraScanner({ onScanComplete, onCancel }) {
         }
     }, [addToast, onCancel]);
     
+    // This effect ensures the stream is attached only after the video element is ready.
+    useEffect(() => {
+        if (stream && videoRef.current) {
+            videoRef.current.srcObject = stream;
+        }
+    }, [stream]);
+
     // Cleanup function to stop the camera stream when the component unmounts
     useEffect(() => {
         return () => {
