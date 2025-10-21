@@ -324,17 +324,17 @@ export default function ContainerModal({
         const liveRef = doc(db, containersPath, container.id);
         const archiveRef = doc(db, archivePath, container.id);
         
-        const revivedData = { ...container, status: 'New', lastUpdate: Timestamp.now() };
+        const revivedData = { ...container, status: 'Denied - Awaiting Update', lastUpdate: Timestamp.now() };
         delete revivedData.archivedAt;
 
         try {
             batch.set(liveRef, revivedData);
             batch.delete(archiveRef);
-            const eventData = { containerId: container.id, timestamp: Timestamp.now(), details: { action: 'Container Revived from Archive' } };
+            const eventData = { containerId: container.id, timestamp: Timestamp.now(), details: { action: 'Container Revived - Awaiting Update' } };
             batch.set(doc(collection(db, eventsPath)), eventData);
             
             await batch.commit();
-            addToast(`Container ${container.id} has been revived and moved back to the live yard.`, 'success');
+            addToast(`Container ${container.id} revived and is awaiting update.`, 'success');
             onClose();
         } catch (error) {
             console.error("Error reviving container:", error);
