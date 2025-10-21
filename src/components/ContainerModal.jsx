@@ -31,7 +31,9 @@ export default function ContainerModal({
     addToast,
     bookingsPath,
     archivedBookingsPath,
-    filledBookingCounts
+    filledBookingCounts,
+    allContainers,
+    allArchivedContainers
 }) {
     const isNew = !container;
     const [formData, setFormData] = useState(
@@ -74,6 +76,16 @@ export default function ContainerModal({
         e.preventDefault();
         const containerId = (isNew ? formData.id : container.id);
         if (!containerId) { addToast("Container number is required.", 'error'); return; }
+
+        if (isNew) {
+            const allExistingContainers = [...allContainers, ...allArchivedContainers];
+            const idExists = allExistingContainers.some(c => c.id.toUpperCase() === formData.id.toUpperCase());
+            if (idExists) {
+                addToast(`Container with ID ${formData.id.toUpperCase()} already exists.`, 'error');
+                return;
+            }
+        }
+        
         if (formData.status === 'ALL GOOD, BOOK FOR DELIVERY') {
             if (!formData.truck || !formData.chassis || !formData.seal || !formData.grossWeight) {
                 addToast("Please fill in Truck/Driver, Chassis, Seal #, and Gross Weight.", 'error');

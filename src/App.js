@@ -551,6 +551,8 @@ function AppContent() {
                     bookingsPath={bookingsPath}
                     archivedBookingsPath={archivedBookingsPath}
                     filledBookingCounts={filledBookingCounts}
+                    allContainers={containers}
+                    allArchivedContainers={archivedContainers}
                 />
             )}
             {isBookingModalOpen && (
