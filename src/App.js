@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'fi
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon } from './icons';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -14,6 +14,7 @@ import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
 import InputField from './components/InputField';
 import { ToastProvider, useToasts } from './hooks/useToasts';
+import Dashboard from './components/Dashboard';
 
 // Main App Component Content
 function AppContent() {
@@ -34,10 +35,9 @@ function AppContent() {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pageView, setPageView] = useState('live'); // 'live', 'archive', or 'reports'
+    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
-    // State for sorting and filtering, now initialized from localStorage
     const [sortConfig, setSortConfig] = useState(() => {
         const savedSort = localStorage.getItem('containerTrackerSort');
         return savedSort ? JSON.parse(savedSort) : { key: 'lastUpdate', direction: 'descending' };
@@ -181,7 +181,7 @@ function AppContent() {
             });
             return () => unsubscribe();
         }
-    }, [user, containersPath, loading]); // Added loading to dependency
+    }, [user, containersPath, loading]);
     
     useEffect(() => {
         if (user) {
@@ -279,6 +279,11 @@ function AppContent() {
         setSortConfig({ key, direction });
     };
 
+    const handleContainerSelectFromDashboard = (container) => {
+        setPageView('live');
+        handleOpenModal(container);
+    };
+
     // --- Main Filtering and Sorting Logic ---
     const processedContainers = useMemo(() => {
         let sourceData = pageView === 'live' ? containers : archivedContainers;
@@ -304,7 +309,7 @@ function AppContent() {
                 const aValue = a[sortConfig.key];
                 const bValue = b[sortConfig.key];
                 
-                if (aValue == null) return 1; // Put nulls/undefined at the end
+                if (aValue == null) return 1;
                 if (bValue == null) return -1;
 
                 if (aValue < bValue) {
@@ -321,6 +326,9 @@ function AppContent() {
     }, [containers, archivedContainers, searchTerm, pageView, filters, sortConfig]);
 
     const renderMainContent = () => {
+        if (pageView === 'dashboard') {
+            return <Dashboard containers={containers} onContainerSelect={handleContainerSelectFromDashboard} />;
+        }
         if (pageView === 'reports') {
             return <ReportsPage archivePath={archivePath} collections={collectionsData} />;
         }
@@ -411,6 +419,16 @@ function AppContent() {
             </>
         )
     }
+    
+    const getPageTitle = () => {
+        switch (pageView) {
+            case 'dashboard': return 'Dashboard';
+            case 'live': return 'Container Yard Tracker';
+            case 'archive': return 'Archived Containers';
+            case 'reports': return 'Reports';
+            default: return 'Container Tracker';
+        }
+    };
 
     return (
         <div className="bg-gray-900 text-gray-100 min-h-screen font-sans">
@@ -429,20 +447,24 @@ function AppContent() {
             <div className="container mx-auto p-4">
                 <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-2">
                     <div className="flex items-center mb-4 sm:mb-0">
-                         <TruckIcon />
-                         <h1 className="text-2xl font-bold text-white">
-                            {pageView === 'live' && 'Container Yard Tracker'}
-                            {pageView === 'archive' && 'Archived Containers'}
-                            {pageView === 'reports' && 'Reports'}
+                         <h1 className="text-2xl font-bold text-white flex items-center">
+                            <TruckIcon /> {getPageTitle()}
                         </h1>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <button
-                            onClick={() => setPageView(pageView === 'live' ? 'archive' : 'live')}
+                            onClick={() => setPageView('dashboard')}
                             className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
-                            <ArchiveIcon />
-                            {pageView === 'archive' ? 'View Live Yard' : 'View Archive'}
+                            <HomeIcon />
+                            Dashboard
+                        </button>
+                         <button
+                            onClick={() => setPageView('live')}
+                            className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <TruckIcon />
+                            Live Yard
                         </button>
                         <button
                             onClick={() => setPageView('reports')}
