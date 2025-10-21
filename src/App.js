@@ -22,6 +22,7 @@ function AppContent() {
     const [containers, setContainers] = useState([]);
     const [archivedContainers, setArchivedContainers] = useState([]);
     const [bookings, setBookings] = useState([]);
+    const [archivedBookings, setArchivedBookings] = useState([]);
     const [collectionsData, setCollectionsData] = useState({
         drivers: [],
         locations: [],
@@ -85,6 +86,7 @@ function AppContent() {
     const archivePath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/archive` : 'archive', [appId, isCanvasEnv]);
     const eventsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/events` : 'events', [appId, isCanvasEnv]);
     const bookingsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/bookings` : 'bookings', [appId, isCanvasEnv]);
+    const archivedBookingsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/archivedBookings` : 'archivedBookings', [appId, isCanvasEnv]);
     const collectionsPaths = useMemo(() => ({
         drivers: isCanvasEnv ? `/artifacts/${appId}/public/data/drivers` : 'drivers',
         locations: isCanvasEnv ? `/artifacts/${appId}/public/data/locations` : 'locations',
@@ -217,6 +219,19 @@ function AppContent() {
         }
     }, [user, bookingsPath]);
 
+     useEffect(() => {
+        if (user) {
+            const q = query(collection(db, archivedBookingsPath));
+            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                const bookingsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setArchivedBookings(bookingsData);
+            }, (error) => {
+                console.error("Error fetching archived bookings:", error);
+            });
+            return () => unsubscribe();
+        }
+    }, [user, archivedBookingsPath]);
+
     // Fetch ALL events to show real-time toasts
     useEffect(() => {
         if (user) {
@@ -254,6 +269,20 @@ function AppContent() {
             setEvents([]);
         }
     }, [selectedContainer, user, eventsPath]);
+
+    // --- Memoized Calculations for Performance ---
+    const filledBookingCounts = useMemo(() => {
+        const allContainers = [...containers, ...archivedContainers];
+        return bookings.reduce((acc, booking) => {
+            acc[booking.id] = allContainers.filter(c => c.booking === booking.id).length;
+            return acc;
+        }, {});
+    }, [bookings, containers, archivedContainers]);
+
+    const openBookings = useMemo(() => {
+        return bookings.filter(booking => (filledBookingCounts[booking.id] || 0) < booking.quantity);
+    }, [bookings, filledBookingCounts]);
+
 
     // --- Event Handlers ---
     const handleOpenModal = (container = null) => {
@@ -512,21 +541,23 @@ function AppContent() {
                     container={selectedContainer}
                     events={events}
                     onClose={handleCloseModal}
-                    bookings={bookings}
+                    openBookings={openBookings}
                     collections={collectionsData}
                     containersPath={containersPath}
                     eventsPath={eventsPath}
                     archivePath={archivePath}
                     isArchived={pageView === 'archive'}
                     addToast={addToast}
+                    bookingsPath={bookingsPath}
+                    archivedBookingsPath={archivedBookingsPath}
+                    filledBookingCounts={filledBookingCounts}
                 />
             )}
             {isBookingModalOpen && (
                 <BookingModal
                     onClose={() => setIsBookingModalOpen(false)}
-                    bookings={bookings}
-                    containers={containers}
-                    archivedContainers={archivedContainers}
+                    openBookings={openBookings}
+                    filledBookingCounts={filledBookingCounts}
                     bookingsPath={bookingsPath}
                     containerTypes={collectionsData.containerTypes}
                     addToast={addToast}

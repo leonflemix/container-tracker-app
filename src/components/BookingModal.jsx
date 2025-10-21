@@ -1,11 +1,10 @@
 // File: src/components/BookingModal.jsx
-
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
 
-export default function BookingModal({ onClose, bookings, containers, archivedContainers, bookingsPath, containerTypes, addToast }) {
+export default function BookingModal({ onClose, openBookings, filledBookingCounts, bookingsPath, containerTypes, addToast }) {
     const [isAdding, setIsAdding] = useState(false);
     const [formData, setFormData] = useState({
         id: '',
@@ -13,15 +12,6 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
         type: '',
     });
     const [isSaving, setIsSaving] = useState(false);
-
-    const filledCounts = useMemo(() => {
-        return bookings.reduce((acc, booking) => {
-            const liveCount = containers.filter(c => c.booking === booking.id).length;
-            const archivedCount = archivedContainers.filter(c => c.booking === booking.id).length;
-            acc[booking.id] = liveCount + archivedCount;
-            return acc;
-        }, {});
-    }, [bookings, containers, archivedContainers]);
 
     const handleChange = (e) => {
         const { name, value, type } = e.target;
@@ -57,11 +47,6 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
             setIsSaving(false);
         }
     };
-    
-    const getTypeColor = (typeName) => {
-        const typeInfo = containerTypes.find(t => t.name === typeName);
-        return typeInfo?.color || 'inherit';
-    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
@@ -88,9 +73,7 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
                                 >
                                     <option value="">-- Select a Type --</option>
                                     {containerTypes.map(type => (
-                                        <option key={type.docId} value={type.name} style={{ color: type.color || 'inherit', backgroundColor: '#374151' }}>
-                                            {type.name}
-                                        </option>
+                                        <option key={type.docId} value={type.name}>{type.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -105,14 +88,14 @@ export default function BookingModal({ onClose, bookings, containers, archivedCo
                     ) : (
                         <div>
                             <div className="space-y-3 mb-4">
-                                {bookings.map(booking => (
+                                {openBookings.map(booking => (
                                     <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
                                         <div>
                                             <p className="font-bold text-white">{booking.id}</p>
-                                            <p className="text-sm font-semibold" style={{ color: getTypeColor(booking.type) }}>{booking.type}</p>
+                                            <p className="text-sm text-gray-400">{booking.type}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-semibold text-white">{filledCounts[booking.id] || 0} / {booking.quantity}</p>
+                                            <p className="text-lg font-semibold text-white">{filledBookingCounts[booking.id] || 0} / {booking.quantity}</p>
                                             <p className="text-xs text-gray-400">Filled</p>
                                         </div>
                                     </div>
