@@ -33,7 +33,7 @@ function AppContent() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
-    const [selectedContainer, setSelectedContainer] = useState(null);
+    const [selectedContainerId, setSelectedContainerId] = useState(null); // Changed to store ID
     const [preselectedBooking, setPreselectedBooking] = useState(null);
     const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -241,6 +241,12 @@ function AppContent() {
             return () => unsubscribe();
         }
     }, [user, eventsPath, addToast]);
+    
+    const selectedContainer = useMemo(() => {
+        if (!selectedContainerId) return null;
+        // Look in both live and archived containers to find the most current version
+        return containers.find(c => c.id === selectedContainerId) || archivedContainers.find(c => c.id === selectedContainerId);
+    }, [selectedContainerId, containers, archivedContainers]);
 
     // Fetch events for selected container
     useEffect(() => {
@@ -276,13 +282,13 @@ function AppContent() {
 
     // --- Event Handlers ---
     const handleOpenModal = (container = null) => {
-        setSelectedContainer(container);
+        setSelectedContainerId(container ? container.id : null); // Store only the ID
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
-        setSelectedContainer(null);
+        setSelectedContainerId(null);
         setPreselectedBooking(null); // Clear preselection on close
     };
 
@@ -535,8 +541,9 @@ function AppContent() {
                 {renderMainContent()}
             </div>
 
-            {isModalOpen && (
+            {isModalOpen && selectedContainer !== undefined && (
                 <ContainerModal
+                    key={selectedContainerId}
                     container={selectedContainer}
                     events={events}
                     onClose={handleCloseModal}
