@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { CONTAINER_STATUSES } from '../constants';
+import { CalendarDaysIcon } from '../icons';
 
 export default function ContainerCard({ container, onSelect, isArchived, containerTypes = [], recentlyUpdated = [] }) {
     let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
@@ -16,6 +17,19 @@ export default function ContainerCard({ container, onSelect, isArchived, contain
     const typeColor = typeInfo?.color || 'inherit';
 
     const isHighlighted = recentlyUpdated.includes(container.id);
+
+    const calculateDaysInYard = () => {
+        if (isArchived) {
+            return container.daysInYard ?? 'N/A';
+        }
+        if (!container.createdAt) return 'N/A';
+        const oneDay = 1000 * 60 * 60 * 24;
+        const now = new Date();
+        const createdDate = new Date(container.createdAt);
+        return Math.floor((now - createdDate) / oneDay);
+    };
+    
+    const daysInYard = calculateDaysInYard();
 
     return (
         <div 
@@ -33,9 +47,15 @@ export default function ContainerCard({ container, onSelect, isArchived, contain
                     <span className="font-semibold text-gray-300">For:</span> 
                     <span className="font-semibold" style={{ color: typeColor }}> {container.bookedFor || 'N/A'}</span>
                 </p>
-                <p className="text-xs text-gray-500 mt-2">
+            </div>
+            <div className="mt-3 flex justify-between items-center text-xs text-gray-500">
+                <p>
                     {isArchived ? `Archived: ${container.archivedAt ? new Date(container.archivedAt).toLocaleString() : 'N/A'}` : `Updated: ${container.lastUpdate ? new Date(container.lastUpdate).toLocaleString() : 'N/A'}`}
                 </p>
+                <div className="flex items-center font-semibold">
+                    <CalendarDaysIcon />
+                    <span>{daysInYard} days</span>
+                </div>
             </div>
         </div>
     );

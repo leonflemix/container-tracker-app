@@ -106,6 +106,7 @@ export default function ContainerModal({
                     booking: formData.booking,
                     bookedFor: selectedBooking?.type || 'N/A',
                     status: 'New',
+                    createdAt: Timestamp.now(), // <-- Add createdAt timestamp
                     lastUpdate: Timestamp.now(),
                     truck: '',
                     deliveryDriver: '',
@@ -271,7 +272,12 @@ export default function ContainerModal({
             const containerRef = doc(db, containersPath, container.id);
             try {
                 const archiveRef = doc(db, archivePath, container.id);
-                const archivedData = { ...container, status: 'Pier Accepted', archivedAt: Timestamp.now() };
+                // Calculate daysInYard before archiving
+                const createdAt = container.createdAt.seconds;
+                const archivedAt = Timestamp.now().seconds;
+                const daysInYard = Math.floor((archivedAt - createdAt) / (60 * 60 * 24));
+
+                const archivedData = { ...container, status: 'Pier Accepted', archivedAt: Timestamp.now(), daysInYard };
                 batch.set(archiveRef, archivedData);
                 batch.delete(containerRef);
                 const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Accepted & Archived' } };
@@ -338,6 +344,7 @@ export default function ContainerModal({
         
         const revivedData = { ...container, status: 'Revived - Awaiting Update', lastUpdate: Timestamp.now() };
         delete revivedData.archivedAt;
+        delete revivedData.daysInYard; // Remove final count as it's live again
 
         try {
             batch.set(liveRef, revivedData);

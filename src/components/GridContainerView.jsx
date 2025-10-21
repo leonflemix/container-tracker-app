@@ -10,6 +10,7 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
                 <thead className="bg-gray-700 text-xs text-gray-400 uppercase tracking-wider">
                     <tr>
                         <th scope="col" className="px-6 py-3">Container #</th>
+                        <th scope="col" className="px-6 py-3">Days In Yard</th>
                         <th scope="col" className="px-6 py-3">Status</th>
                         <th scope="col" className="px-6 py-3">Booking #</th>
                         <th scope="col" className="px-6 py-3">Type</th>
@@ -33,9 +34,22 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
                         const typeColor = typeInfo?.color || 'inherit';
                         const isHighlighted = recentlyUpdated.includes(container.id);
 
+                        const calculateDaysInYard = () => {
+                            if (isArchived) {
+                                return container.daysInYard ?? 'N/A';
+                            }
+                            if (!container.createdAt) return 'N/A';
+                            const oneDay = 1000 * 60 * 60 * 24;
+                            const now = new Date();
+                            const createdDate = new Date(container.createdAt);
+                            return Math.floor((now - createdDate) / oneDay);
+                        };
+                        const daysInYard = calculateDaysInYard();
+
                         return (
                             <tr key={container.id} className={`hover:bg-gray-700 ${isHighlighted ? 'highlight-update' : ''}`}>
                                 <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{container.id}</td>
+                                <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{daysInYard}</td>
                                 <td className="px-6 py-4 whitespace-nowrap"><span className="mr-2">{statusInfo.emoji}</span>{statusInfo.label}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">{container.booking || 'N/A'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap font-semibold" style={{ color: typeColor }}>

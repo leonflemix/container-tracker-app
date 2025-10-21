@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'fi
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon } from './icons';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -42,7 +42,7 @@ function AppContent() {
     // State for sorting and filtering, now initialized from localStorage
     const [sortConfig, setSortConfig] = useState(() => {
         const savedSort = localStorage.getItem('containerTrackerSort');
-        return savedSort ? JSON.parse(savedSort) : { key: 'lastUpdate', direction: 'descending' };
+        return savedSort ? JSON.parse(savedSort) : { key: 'createdAt', direction: 'ascending' }; // Default to FIFO
     });
     const [filters, setFilters] = useState(() => {
         const savedFilters = localStorage.getItem('containerTrackerFilters');
@@ -140,7 +140,8 @@ function AppContent() {
                     currentContainers = snapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data(),
-                        lastUpdate: doc.data().lastUpdate?.toDate()
+                        lastUpdate: doc.data().lastUpdate?.toDate(),
+                        createdAt: doc.data().createdAt?.toDate() // Ensure createdAt is a Date
                     }));
                 }
                 
@@ -148,7 +149,8 @@ function AppContent() {
                     const changedDoc = {
                         id: change.doc.id,
                         ...change.doc.data(),
-                        lastUpdate: change.doc.data().lastUpdate?.toDate()
+                        lastUpdate: change.doc.data().lastUpdate?.toDate(),
+                        createdAt: change.doc.data().createdAt?.toDate()
                     };
 
                     if (change.type === "modified") {
@@ -170,7 +172,8 @@ function AppContent() {
                             containerMap.set(change.doc.id, {
                                 id: change.doc.id,
                                 ...change.doc.data(),
-                                lastUpdate: change.doc.data().lastUpdate?.toDate()
+                                lastUpdate: change.doc.data().lastUpdate?.toDate(),
+                                createdAt: change.doc.data().createdAt?.toDate()
                             });
                         }
                     });
@@ -193,7 +196,8 @@ function AppContent() {
                 const archiveData = querySnapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data(),
-                    archivedAt: doc.data().archivedAt?.toDate()
+                    archivedAt: doc.data().archivedAt?.toDate(),
+                    createdAt: doc.data().createdAt?.toDate()
                 }));
                 setArchivedContainers(archiveData);
             }, (error) => {
@@ -407,6 +411,9 @@ function AppContent() {
                             <div className="flex-shrink-0">
                                  <label className="block text-sm font-medium text-gray-300 mb-1">Sort by</label>
                                  <div className="flex gap-2">
+                                     <button onClick={() => requestSort('createdAt')} className={`flex items-center p-2 rounded-md ${sortConfig.key === 'createdAt' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                         Age {sortConfig.key === 'createdAt' && (sortConfig.direction === 'ascending' ? <SortAscIcon/> : <SortDescIcon/>)}
+                                     </button>
                                      <button onClick={() => requestSort('lastUpdate')} className={`flex items-center p-2 rounded-md ${sortConfig.key === 'lastUpdate' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
                                          Last Update {sortConfig.key === 'lastUpdate' && (sortConfig.direction === 'ascending' ? <SortAscIcon/> : <SortDescIcon/>)}
                                      </button>
