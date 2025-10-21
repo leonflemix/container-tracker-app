@@ -141,13 +141,26 @@ function AppContent() {
         if (user) {
             const q = query(collection(db, containersPath));
             const unsubscribe = onSnapshot(q, (snapshot) => {
-                const containersData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    lastUpdate: doc.data().lastUpdate?.toDate(),
-                    createdAt: doc.data().createdAt?.toDate()
-                }));
-                setContainers(containersData);
+                
+                // More robust state update using docChanges()
+                setContainers(prevContainers => {
+                    const containerMap = new Map(prevContainers.map(c => [c.id, c]));
+                    snapshot.docChanges().forEach(change => {
+                        const docData = {
+                            id: change.doc.id,
+                            ...change.doc.data(),
+                            lastUpdate: change.doc.data().lastUpdate?.toDate(),
+                            createdAt: change.doc.data().createdAt?.toDate()
+                        };
+
+                        if (change.type === 'removed') {
+                            containerMap.delete(change.doc.id);
+                        } else { // added or modified
+                            containerMap.set(change.doc.id, docData);
+                        }
+                    });
+                    return Array.from(containerMap.values());
+                });
 
                 // Only trigger highlights for changes after the initial load
                 if (!isInitialContainersLoad.current) {
