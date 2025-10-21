@@ -18,7 +18,21 @@ import ConfirmationModal from './ConfirmationModal';
 import { CONTAINER_STATUSES } from '../constants';
 import { UndoIcon } from '../icons';
 
-export default function ContainerModal({ container, events, onClose, bookings, collections, containersPath, eventsPath, archivePath, isArchived, addToast }) {
+export default function ContainerModal({ 
+    container, 
+    events, 
+    onClose, 
+    openBookings, 
+    collections, 
+    containersPath, 
+    eventsPath, 
+    archivePath, 
+    isArchived, 
+    addToast,
+    bookingsPath,
+    archivedBookingsPath,
+    filledBookingCounts
+}) {
     const isNew = !container;
     const [formData, setFormData] = useState(
         isNew 
@@ -68,10 +82,12 @@ export default function ContainerModal({ container, events, onClose, bookings, c
         }
         setIsSaving(true);
         const containerRef = doc(db, containersPath, containerId.toUpperCase());
+        const batch = writeBatch(db);
+
         try {
             if (isNew) {
                 if (!formData.booking) { addToast("Please select a booking.", 'error'); setIsSaving(false); return; }
-                const selectedBooking = bookings.find(b => b.id === formData.booking);
+                const selectedBooking = openBookings.find(b => b.id === formData.booking);
                 const dataToSave = {
                     id: formData.id.toUpperCase(),
                     seal: '',
@@ -88,9 +104,21 @@ export default function ContainerModal({ container, events, onClose, bookings, c
                     hasHolesAfterSquish: false,
                 };
                 const eventData = { containerId: formData.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: `Container created with status: New for booking ${formData.booking}` } };
-                await setDoc(containerRef, dataToSave);
-                await addDoc(collection(db, eventsPath), eventData);
+                batch.set(containerRef, dataToSave);
+                batch.set(doc(collection(db, eventsPath)), eventData);
                 addToast(`Container ${formData.id.toUpperCase()} added successfully!`, 'success');
+
+                // Check if this container fills the booking
+                const currentFilledCount = filledBookingCounts[selectedBooking.id] || 0;
+                if (currentFilledCount + 1 >= selectedBooking.quantity) {
+                    const bookingToArchiveRef = doc(db, bookingsPath, selectedBooking.id);
+                    const archivedBookingRef = doc(db, archivedBookingsPath, selectedBooking.id);
+                    const archivedBookingData = { ...selectedBooking, archivedAt: Timestamp.now() };
+                    batch.set(archivedBookingRef, archivedBookingData);
+                    batch.delete(bookingToArchiveRef);
+                    addToast(`Booking ${selectedBooking.id} is now full and has been archived.`, 'info');
+                }
+
             } else {
                 const changes = [];
                 for (const key in formData) {
@@ -101,12 +129,13 @@ export default function ContainerModal({ container, events, onClose, bookings, c
                 if (changes.length > 0) {
                     const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
                     delete dataToUpdate.id;
-                    await setDoc(containerRef, dataToUpdate, { merge: true });
+                    batch.set(containerRef, dataToUpdate, { merge: true });
                     const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Container updated', changes: changes.join('; ') } };
-                    await addDoc(collection(db, eventsPath), eventData);
+                    batch.set(doc(collection(db, eventsPath)), eventData);
                     addToast(`Container ${container.id.toUpperCase()} updated successfully!`, 'success');
                 }
             }
+            await batch.commit();
             onClose();
         } catch (error) {
             console.error("Error saving container:", error);
@@ -317,10 +346,10 @@ export default function ContainerModal({ container, events, onClose, bookings, c
 
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) {
-            return bookings.find(b => b.id === formData.booking)?.type || null;
+            return openBookings.find(b => b.id === formData.booking)?.type || null;
         }
         return null;
-    }, [formData.booking, bookings, isNew]);
+    }, [formData.booking, openBookings, isNew]);
 
     const availableStatuses = useMemo(() => {
         const statuses = CONTAINER_STATUSES.filter(s => s.isDispatchOption);
@@ -382,8 +411,8 @@ export default function ContainerModal({ container, events, onClose, bookings, c
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Booking # *</label>
                         <select name="booking" value={formData.booking} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- Select a Booking --</option>
-                            {bookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
+                            <option value="">-- Select an Open Booking --</option>
+                            {openBookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
                         </select>
                     </div>
                     {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
