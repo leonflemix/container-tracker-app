@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'fi
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon, CameraIcon, PencilIcon, PlusCircleIcon } from './icons';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon, CameraIcon, PencilIcon, PlusCircleIcon, UploadIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -71,19 +71,13 @@ function AppContent() {
 
     // --- Dynamically load external scripts ---
     useEffect(() => {
-        const scripts = [
-            { id: 'tailwind-cdn', src: 'https://cdn.tailwindcss.com' },
-            { id: 'tesseract-cdn', src: 'https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js' }
-        ];
-
-        scripts.forEach(scriptInfo => {
-            if (!document.getElementById(scriptInfo.id)) {
-                const script = document.createElement('script');
-                script.id = scriptInfo.id;
-                script.src = scriptInfo.src;
-                document.head.appendChild(script);
-            }
-        });
+        const scriptId = 'tailwind-cdn';
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = 'https://cdn.tailwindcss.com';
+            document.head.appendChild(script);
+        }
     }, []);
 
     // Adapt paths based on environment. This makes the app portable.
@@ -149,7 +143,6 @@ function AppContent() {
                 }));
                 setContainers(containersData);
 
-                // Only trigger highlights for changes after the initial load
                 if (!isInitialContainersLoad.current) {
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === "modified") {
