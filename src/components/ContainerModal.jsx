@@ -100,7 +100,7 @@ export default function ContainerModal({
         
         try {
             const base64ImageData = await fileToBase64(file);
-            const apiKey = ""; // API key is handled by the environment
+            const apiKey = "AIzaSyBGhwGLai5xANhZ7MkGQM8IoBMBxpfV_kg"; // API key is handled by the environment
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
