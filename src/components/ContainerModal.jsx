@@ -1,6 +1,6 @@
 // File: src/components/ContainerModal.jsx
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { db, Timestamp } from '../firebase.js';
+import { db, Timestamp } from '../firebase';
 import {
     collection,
     doc,
@@ -12,11 +12,11 @@ import {
     getDocs,
     writeBatch
 } from 'firebase/firestore';
-import InputField from './InputField.jsx';
-import CheckboxField from './CheckboxField.jsx';
-import ConfirmationModal from './ConfirmationModal.jsx';
-import { CONTAINER_STATUSES } from '../constants.js';
-import { UndoIcon, CameraIcon, UploadIcon } from '../icons.jsx';
+import InputField from './InputField';
+import CheckboxField from './CheckboxField';
+import ConfirmationModal from './ConfirmationModal';
+import { CONTAINER_STATUSES } from '../constants';
+import { UndoIcon, CameraIcon, UploadIcon } from '../icons';
 
 export default function ContainerModal({ 
     container, 
@@ -380,10 +380,17 @@ export default function ContainerModal({
                 const archiveRef = doc(db, archivePath, container.id);
 
                 // --- ERROR FIX ---
-                // container.createdAt is a JS Date object, not a Timestamp.
-                // Convert it to seconds using .getTime()
-                const createdAtDate = container.createdAt; // This is a JS Date
-                const createdAtSeconds = Math.floor(createdAtDate.getTime() / 1000); // Convert to seconds
+                // Add a check for container.createdAt, as it might be missing on old data.
+                let createdAtSeconds;
+                if (container.createdAt && typeof container.createdAt.getTime === 'function') {
+                    const createdAtDate = container.createdAt; // This is a JS Date
+                    createdAtSeconds = Math.floor(createdAtDate.getTime() / 1000); // Convert to seconds
+                } else {
+                    // Fallback: If no createdAt, can't calculate days. Use archived time.
+                    createdAtSeconds = Timestamp.now().seconds; 
+                    console.warn(`Container ${container.id} is missing 'createdAt' field. daysInYard will be 0.`);
+                }
+                
                 const archivedAtSeconds = Timestamp.now().seconds;
                 const daysInYard = Math.floor((archivedAtSeconds - createdAtSeconds) / (60 * 60 * 24));
                 // --- END FIX ---
