@@ -1,6 +1,6 @@
 // File: src/components/ContainerModal.jsx
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { db, Timestamp } from '../firebase';
+import { db, Timestamp } from '../firebase.js';
 import {
     collection,
     doc,
@@ -12,11 +12,11 @@ import {
     getDocs,
     writeBatch
 } from 'firebase/firestore';
-import InputField from './InputField';
-import CheckboxField from './CheckboxField';
-import ConfirmationModal from './ConfirmationModal';
-import { CONTAINER_STATUSES } from '../constants';
-import { UndoIcon, CameraIcon, UploadIcon } from '../icons';
+import InputField from './InputField.jsx';
+import CheckboxField from './CheckboxField.jsx';
+import ConfirmationModal from './ConfirmationModal.jsx';
+import { CONTAINER_STATUSES } from '../constants.js';
+import { UndoIcon, CameraIcon, UploadIcon } from '../icons.jsx';
 
 export default function ContainerModal({ 
     container, 
@@ -100,10 +100,7 @@ export default function ContainerModal({
         
         try {
             const base64ImageData = await fileToBase64(file);
-            // --- SECURITY FIX: API Key is now an empty string. ---
-            // The environment will securely inject the key.
-            const apiKey = ""; 
-            // --- END FIX ---
+            const apiKey = ""; // Environment handles this
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -381,9 +378,15 @@ export default function ContainerModal({
             const containerRef = doc(db, containersPath, container.id);
             try {
                 const archiveRef = doc(db, archivePath, container.id);
-                const createdAt = container.createdAt.seconds;
-                const archivedAt = Timestamp.now().seconds;
-                const daysInYard = Math.floor((archivedAt - createdAt) / (60 * 60 * 24));
+
+                // --- ERROR FIX ---
+                // container.createdAt is a JS Date object, not a Timestamp.
+                // Convert it to seconds using .getTime()
+                const createdAtDate = container.createdAt; // This is a JS Date
+                const createdAtSeconds = Math.floor(createdAtDate.getTime() / 1000); // Convert to seconds
+                const archivedAtSeconds = Timestamp.now().seconds;
+                const daysInYard = Math.floor((archivedAtSeconds - createdAtSeconds) / (60 * 60 * 24));
+                // --- END FIX ---
 
                 const archivedData = { ...container, status: 'Pier Accepted', archivedAt: Timestamp.now(), daysInYard };
                 batch.set(archiveRef, archivedData);
@@ -497,10 +500,10 @@ export default function ContainerModal({
                     <div className="p-4 lg:w-1/2 space-y-3">
                         <h3 className="text-lg font-semibold text-center mb-4">Archived Container Details</h3>
                         {Object.entries(container).map(([key, value]) => {
-                           if (typeof value !== 'object' || value === null) {
+                           if (typeof value !== 'object' || value === null || value instanceof Date) {
                                 // Format Timestamps
                                 if (key === 'createdAt' || key === 'lastUpdate' || key === 'archivedAt') {
-                                    value = value.toDate ? value.toDate().toLocaleString() : new Date(value).toLocaleString();
+                                    value = value ? value.toLocaleString() : 'N/A';
                                 }
                                 return <InputField key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^\w/, c => c.toUpperCase())} value={String(value)} disabled />
                            }
@@ -733,4 +736,5 @@ export default function ContainerModal({
         </div>
     );
 }
+
 
