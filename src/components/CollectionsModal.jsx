@@ -1,10 +1,10 @@
-// File: src/components/CollectionsModal.jsx
 import React, { useState } from 'react';
 import { db } from '../firebase';
 import { collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import TabButton from './TabButton';
 import CollectionManager from './CollectionManager';
 
-export default function CollectionsModal({ onClose, paths, collectionsData, addToast }) {
+export default function CollectionsModal({ onClose, paths, collectionsData }) {
     const [activeTab, setActiveTab] = useState('drivers');
 
     const handleSave = async (collectionName, data, isNew) => {
@@ -14,21 +14,13 @@ export default function CollectionsModal({ onClose, paths, collectionsData, addT
         delete dataToSave.docId;
         try {
             await setDoc(docRef, dataToSave, { merge: !isNew });
-            addToast(`${collectionName.slice(0, -1)} item saved successfully!`, 'success');
-        } catch (error) { 
-            console.error(`Error saving to ${collectionName}:`, error); 
-            addToast(`Failed to save item in ${collectionName}.`, 'error');
-        }
+        } catch (error) { console.error(`Error saving to ${collectionName}:`, error); }
     };
     
     const handleDelete = async (collectionName, docId) => {
         try {
             await deleteDoc(doc(db, paths[collectionName], docId));
-            addToast(`${collectionName.slice(0, -1)} item deleted successfully!`, 'success');
-        } catch (error) { 
-            console.error(`Error deleting from ${collectionName}:`, error);
-            addToast(`Failed to delete item from ${collectionName}.`, 'error');
-        }
+        } catch (error) { console.error(`Error deleting from ${collectionName}:`, error); }
     };
     
     return (
@@ -50,10 +42,9 @@ export default function CollectionsModal({ onClose, paths, collectionsData, addT
                     {activeTab === 'drivers' && <CollectionManager collectionName="drivers" data={collectionsData.drivers} onSave={handleSave} onDelete={handleDelete} fields={{name: 'text', id: 'text', plate: 'text', weight: 'number'}} />}
                     {activeTab === 'locations' && <CollectionManager collectionName="locations" data={collectionsData.locations} onSave={handleSave} onDelete={handleDelete} fields={{location: 'text'}} />}
                     {activeTab === 'chassis' && <CollectionManager collectionName="chassis" data={collectionsData.chassis} onSave={handleSave} onDelete={handleDelete} fields={{id: 'text', weight: 'number', is2x20: 'boolean', is40ft: 'boolean'}} />}
-                    {activeTab === 'containerTypes' && <CollectionManager collectionName="containerTypes" data={collectionsData.containerTypes} onSave={handleSave} onDelete={handleDelete} fields={{name: 'text', color: 'color'}} />}
+                    {activeTab === 'containerTypes' && <CollectionManager collectionName="containerTypes" data={collectionsData.containerTypes} onSave={handleSave} onDelete={handleDelete} fields={{name: 'text'}} />}
                 </div>
             </div>
         </div>
     );
 }
-

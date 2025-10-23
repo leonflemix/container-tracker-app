@@ -1,4 +1,3 @@
-// File: src/components/CollectionForm.jsx
 import React, { useState, useEffect } from 'react';
 import InputField from './InputField';
 import CheckboxField from './CheckboxField';
@@ -62,4 +61,3 @@ export default function CollectionForm({ fields, initialData = {}, onSave, onCan
         </form>
     );
 }
-

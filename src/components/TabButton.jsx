@@ -1,5 +1,3 @@
-// File: src/components/TabButton.jsx
-
 import React from 'react';
 export default function TabButton({ name, activeTab, setActiveTab, children }) {
     return (
