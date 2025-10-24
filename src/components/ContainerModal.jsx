@@ -15,7 +15,8 @@ import {
 import InputField from './InputField';
 import CheckboxField from './CheckboxField';
 import ConfirmationModal from './ConfirmationModal';
-import CameraScanner from './CameraScanner';
+// CameraScanner component is no longer used, so we can remove the import.
+// import CameraScanner from './CameraScanner'; 
 import { CONTAINER_STATUSES } from '../constants';
 import { UndoIcon, CameraIcon, UploadIcon } from '../icons';
 
@@ -94,21 +95,19 @@ export default function ContainerModal({
         return {}; // Default empty
     });
 
-    const [isSaving, setIsSaving] = useState(false);
+    const [isSaving, setIsSaving] = useState(false); // Combined loading state
     const [selectedLocation, setSelectedLocation] = useState('');
     const [selectedDriver, setSelectedDriver] = useState('');
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [denialStep, setDenialStep] = useState(null);
     const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
-    const [isScannerOpen, setIsScannerOpen] = useState(false);
+    // const [isScannerOpen, setIsScannerOpen] = useState(false); // Removed as CameraScanner component is removed
     const uploadFileInputRef = useRef(null); // Separate ref for upload
     const scanFileInputRef = useRef(null);   // Separate ref for camera scan
 
     // Effect to re-synchronize formData IF the container prop actually changes ID
-    // or if the initial container prop was null/undefined and then populated.
      useEffect(() => {
         if (!isNew && container) {
-            // Update formData only if the container ID is different from the current formData ID
              if (!formData.id || formData.id !== container.id) {
                 console.log("Syncing formData with new container prop:", container.id); // Debug log
                 setFormData({
@@ -124,26 +123,22 @@ export default function ContainerModal({
                     bookedFor: container.bookedFor || '',
                     hasHolesBeforeSquish: container.hasHolesBeforeSquish || false,
                     hasHolesAfterSquish: container.hasHolesAfterSquish || false,
-                    // Store timestamps directly
                     createdAt: container.createdAt,
                     lastUpdate: container.lastUpdate
                 });
             }
         } else if (isNew) {
-             // Ensure preselectedBooking is set if provided and different
              if(preselectedBooking && formData.booking !== preselectedBooking) {
                  setFormData(prev => ({ ...prev, booking: preselectedBooking }));
              }
-             // Ensure status is 'New' if formData somehow lost it (less likely now)
              if (formData.status !== 'New') {
                  setFormData(prev => ({...prev, status: 'New'}));
              }
         }
-    }, [container, isNew, preselectedBooking, formData.id, formData.booking, formData.status]); // Add formData.status
+    }, [container, isNew, preselectedBooking, formData.id, formData.booking, formData.status]);
 
 
     const isAtLocation = useMemo(() => {
-         // Use optional chaining for safety
         if (!container?.status || !collections.locations) return false;
         return collections.locations.some(loc => loc.location === container.status);
     }, [container, collections.locations]);
@@ -162,16 +157,14 @@ export default function ContainerModal({
         });
 
     const processOcrText = (text) => {
-        console.log("Scanned Text:", text);
+        console.log("Scanned/Uploaded Text:", text);
 
-        // More robust Regex for container number (handles spaces and newlines between parts, includes check digit)
         const containerIdMatch = text.match(/([A-Z]{4})\s*(\d{6})\s*(\d)/);
-        // More robust Regex for TARE weight, looking for numbers before KGS (allows for comma or period)
         const tareMatch = text.match(/TARE[\s\S]*?(\d{1,3}[.,]?\d{3})\s*KGS/i);
 
         let foundId = false;
         if (containerIdMatch && containerIdMatch[1] && containerIdMatch[2] && containerIdMatch[3]) {
-            const id = `${containerIdMatch[1]}${containerIdMatch[2]}${containerIdMatch[3]}`; // Combine parts including check digit
+            const id = `${containerIdMatch[1]}${containerIdMatch[2]}${containerIdMatch[3]}`;
             setFormData(prev => ({ ...prev, id }));
             addToast(`Found Container ID: ${id}`, 'success');
             foundId = true;
@@ -181,7 +174,7 @@ export default function ContainerModal({
 
         let foundTare = false;
         if (tareMatch && tareMatch[1]) {
-            const tareWeight = parseInt(tareMatch[1].replace(/[.,]/g, ''), 10); // Remove comma or period
+            const tareWeight = parseInt(tareMatch[1].replace(/[.,]/g, ''), 10);
             setFormData(prev => ({ ...prev, tareWeight }));
             addToast(`Found Tare Weight: ${tareWeight} KGS`, 'success');
             foundTare = true;
@@ -190,21 +183,32 @@ export default function ContainerModal({
         }
     };
 
-    const handleScanComplete = (text) => {
-        setIsScannerOpen(false);
-        processOcrText(text);
-    };
+    // Removed handleScanComplete as CameraScanner component is removed
 
-    const handleImageProcess = async (event) => { // Renamed from handle
+    const handleImageProcess = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
+
+        // *** THIS IS THE FIX ***
+        // Retrieve API Key from environment variable
+        const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+
+        // Check if the API key is available
+        if (!apiKey) {
+            addToast("Gemini API key is not configured.", 'error');
+            console.error("Gemini API key is missing. Set REACT_APP_GEMINI_API_KEY environment variable.");
+             // Reset file input value
+            if (event.target) event.target.value = null;
+            return;
+        }
+        // *** END OF FIX ***
 
         setIsSaving(true); // Indicate processing
         addToast("Processing image with Gemini...", "info");
 
         try {
             const base64ImageData = await fileToBase64(file);
-            const apiKey = ""; // API key is handled by the environment
+            // Use the environment variable for the API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -232,24 +236,23 @@ export default function ContainerModal({
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload),
                     });
-                    if (response.ok) break; // Exit loop if successful
-                    if (response.status === 429 || response.status >= 500) { // Retry on rate limit or server error
-                        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i))); // Exponential backoff
+                    if (response.ok) break;
+                    if (response.status === 429 || response.status >= 500) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
                         console.log(`Retrying API call (${i + 1})...`);
                         continue;
                     }
-                    // Don't retry for other client errors (e.g., 400 Bad Request)
                     break;
                 } catch (networkError) {
                     console.error("Network error during fetch:", networkError);
-                    if (i === 2) throw networkError; // Throw after last retry
+                    if (i === 2) throw networkError;
                     await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
                 }
             }
 
 
-            if (!response || !response.ok) { // Check if response exists before accessing ok
-                const errorBody = response ? await response.json().catch(() => ({ error: { message: response.statusText } })) : { error: { message: "Network error or no response"} }; // Graceful error parsing
+            if (!response || !response.ok) {
+                const errorBody = response ? await response.json().catch(() => ({ error: { message: response.statusText } })) : { error: { message: "Network error or no response"} };
                 throw new Error(`API Error: ${errorBody.error?.message || response?.statusText || "Unknown fetch error"}`);
             }
 
@@ -259,14 +262,13 @@ export default function ContainerModal({
             if (text) {
                 processOcrText(text.trim());
             } else {
-                // Check for safety ratings or blocked content
                 const safetyReason = result.candidates?.[0]?.finishReason;
                 if (safetyReason && safetyReason !== "STOP") {
-                     throw new Error(`Content generation stopped due to safety reasons: ${safetyReason}`);
+                     throw new Error(`Content generation stopped: ${safetyReason}`);
                 } else if (result.promptFeedback?.blockReason) {
-                     throw new Error(`Prompt blocked due to safety reasons: ${result.promptFeedback.blockReason}`);
+                     throw new Error(`Prompt blocked: ${result.promptFeedback.blockReason}`);
                 } else {
-                    throw new Error("Could not extract text. The image might be unclear or empty.");
+                    throw new Error("Could not extract text from image.");
                 }
             }
         } catch (err) {
@@ -274,7 +276,6 @@ export default function ContainerModal({
             console.error(err);
         } finally {
             setIsSaving(false);
-            // Reset file input value so the same file can be selected again if needed
             if (event.target) {
                  event.target.value = null;
             }
@@ -284,7 +285,7 @@ export default function ContainerModal({
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const containerId = (isNew ? formData.id : container?.id); // Use optional chaining for container
+        const containerId = (isNew ? formData.id : container?.id);
         if (!containerId) { addToast("Container number is required.", 'error'); return; }
 
         if (isNew) {
@@ -296,11 +297,10 @@ export default function ContainerModal({
             }
         }
 
-        // Ensure formData is populated before checking specific fields, especially for new containers
         if (!formData.status) {
              addToast("Form data is not ready.", 'error');
              console.error("Attempted to submit with missing status in formData", formData);
-             return; // Prevent submission if formData isn't loaded correctly
+             return;
         }
 
         if (formData.status === 'ALL GOOD, BOOK FOR DELIVERY') {
@@ -317,7 +317,7 @@ export default function ContainerModal({
             if (isNew) {
                 if (!formData.booking) { addToast("Please select a booking.", 'error'); setIsSaving(false); return; }
                 const selectedBooking = openBookings.find(b => b.id === formData.booking);
-                if (!selectedBooking) { // Add check for valid booking selection
+                if (!selectedBooking) {
                     addToast("Selected booking is not valid or no longer open.", 'error');
                     setIsSaving(false);
                     return;
@@ -327,8 +327,8 @@ export default function ContainerModal({
                     seal: '',
                     booking: formData.booking,
                     bookedFor: selectedBooking?.type || 'N/A',
-                    status: 'New', // Status is correctly set here
-                    createdAt: Timestamp.now(), // Use Firestore Timestamp for new containers
+                    status: 'New',
+                    createdAt: Timestamp.now(),
                     lastUpdate: Timestamp.now(),
                     truck: '',
                     deliveryDriver: '',
@@ -354,57 +354,51 @@ export default function ContainerModal({
                 }
 
             } else {
-                 if (!container) { // Add safety check for edit mode
+                 if (!container) {
                      addToast("Cannot save changes, container data is missing.", 'error');
                      setIsSaving(false);
                      return;
                  }
                 const changes = [];
-                 // Prepare data for update, ensuring timestamps are preserved or updated correctly
                 const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
-                // Explicitly keep the original createdAt timestamp if it exists
                 if (container.createdAt) {
                     dataToUpdate.createdAt = container.createdAt;
                 } else {
-                    // Fallback if somehow createdAt was missing (shouldn't happen for existing)
                     dataToUpdate.createdAt = Timestamp.now();
                     console.warn("Original createdAt missing, setting to now for container:", container.id);
                 }
 
 
                 for (const key in dataToUpdate) {
-                     // Check changes against the original container prop
                      if (Object.hasOwnProperty.call(dataToUpdate, key) && dataToUpdate[key] !== container[key]) {
-                        // Skip comparing timestamp objects directly if they are both timestamps
                         if (!(container[key] instanceof Timestamp && dataToUpdate[key] instanceof Timestamp && container[key].isEqual(dataToUpdate[key]))) {
                              changes.push(`${key} changed from '${container[key] === undefined ? '' : container[key]}' to '${dataToUpdate[key]}'`);
                          }
                     }
                 }
 
-                 // Remove id from the update payload
                 delete dataToUpdate.id;
 
                 if (changes.length > 0) {
-                    batch.set(containerRef, dataToUpdate, { merge: true }); // Use merge: true
+                    batch.set(containerRef, dataToUpdate, { merge: true });
                     const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Container updated', changes: changes.join('; ') } };
                     batch.set(doc(collection(db, eventsPath)), eventData);
                     addToast(`Container ${container.id.toUpperCase()} updated successfully!`, 'success');
                 } else {
-                     addToast('No changes detected.', 'info'); // Inform user if no changes were made
+                     addToast('No changes detected.', 'info');
                 }
             }
             await batch.commit();
             onClose();
         } catch (error) {
             console.error("Error saving container:", error);
-            addToast(`Failed to save container: ${error.message}`, 'error'); // Show more specific error
+            addToast(`Failed to save container: ${error.message}`, 'error');
         } finally { setIsSaving(false); }
     };
 
     // ... (rest of handlers remain unchanged, ensure they also check if 'container' exists before using it) ...
     const handleDelete = async () => {
-        if (!container) return; // Add check
+        if (!container) return;
          try {
             await deleteDoc(doc(db, containersPath, container.id));
             const eventsQuery = query(collection(db, eventsPath), where("containerId", "==", container.id));
@@ -422,7 +416,7 @@ export default function ContainerModal({
 
     const handleLocationSubmit = async (e) => {
         e.preventDefault();
-        if (!container) return; // Add check
+        if (!container) return;
         if (!selectedLocation) { addToast("Please select a location.", 'error'); return; }
         setIsSaving(true);
         const containerRef = doc(db, containersPath, container.id.toUpperCase());
@@ -440,7 +434,7 @@ export default function ContainerModal({
     };
 
     const handleMarkAsLoaded = async () => {
-         if (!container) return; // Add check
+         if (!container) return;
         setIsSaving(true);
         const containerRef = doc(db, containersPath, container.id.toUpperCase());
         const newStatus = 'Loading Complete';
@@ -459,7 +453,7 @@ export default function ContainerModal({
 
     const handleAssignDriver = async (e) => {
         e.preventDefault();
-         if (!container) return; // Add check
+         if (!container) return;
         if (!selectedDriver) { addToast("Please select a driver to assign.", 'error'); return; }
         setIsSaving(true);
         const containerRef = doc(db, containersPath, container.id.toUpperCase());
@@ -478,7 +472,7 @@ export default function ContainerModal({
     };
 
     const handleUndo = async () => {
-         if (!container || events.length < 1) { // Add check for container
+         if (!container || events.length < 1) {
             addToast("Cannot undo. No previous state found.", 'error'); return;
         }
         const lastEvent = events[0];
@@ -489,37 +483,30 @@ export default function ContainerModal({
         setIsSaving(true);
         try {
             const containerRef = doc(db, containersPath, container.id);
-            // Start with a deep copy of the current container state from the prop
-            // This preserves existing Timestamps
             let stateToRestore = JSON.parse(JSON.stringify(container));
 
             const changesToRevert = lastEvent.details.changes.split('; ');
 
             changesToRevert.forEach(change => {
-                const match = change.match(/(.+?) changed from '(.*?)' to '(.*?)'$/); // Use non-greedy match
+                const match = change.match(/(.+?) changed from '(.*?)' to '(.*?)'$/);
                 if (match) {
                     const [, key, fromValueStr] = match;
-                    const trimmedKey = key.trim(); // Trim key just in case
+                    const trimmedKey = key.trim();
 
                     if (Object.hasOwnProperty.call(stateToRestore, trimmedKey)) {
-                         // Attempt to parse the 'fromValueStr' back to its likely original type
                          let originalValue;
-                         const currentValue = container[trimmedKey]; // Compare type with current value
+                         const currentValue = container[trimmedKey];
 
                          if (typeof currentValue === 'boolean') {
                              originalValue = (fromValueStr === 'true');
                          } else if (typeof currentValue === 'number') {
                              originalValue = parseFloat(fromValueStr) || 0;
                          } else if (currentValue instanceof Timestamp || trimmedKey === 'createdAt' || trimmedKey === 'lastUpdate' || trimmedKey === 'archivedAt') {
-                             // If the original value was likely a Timestamp, try to parse it back.
-                             // This is tricky as the string format isn't guaranteed.
-                             // A safer approach might be needed if Timestamps are frequently reverted.
-                             // For now, we'll keep the timestamp from the *current* state if revert fails.
                              console.warn(`Attempting to revert potential Timestamp field '${trimmedKey}'. String value: '${fromValueStr}'. Reverting may not restore exact time.`);
-                             originalValue = currentValue; // Fallback: keep current timestamp
+                             originalValue = currentValue;
                          }
                          else {
-                              originalValue = fromValueStr; // Default to string
+                              originalValue = fromValueStr;
                          }
                          stateToRestore[trimmedKey] = originalValue;
                     } else {
@@ -530,31 +517,25 @@ export default function ContainerModal({
                 }
             });
 
-            // Ensure critical timestamps are valid Firestore Timestamps
-             stateToRestore.lastUpdate = Timestamp.now(); // Always set lastUpdate to now
-             // Ensure createdAt is still a valid Timestamp (it should be from the deep copy)
+             stateToRestore.lastUpdate = Timestamp.now();
              if (!(stateToRestore.createdAt instanceof Timestamp) && container.createdAt instanceof Timestamp) {
                   console.warn("createdAt was lost during undo, restoring from original prop.");
                   stateToRestore.createdAt = container.createdAt;
              } else if (!stateToRestore.createdAt) {
-                 // If createdAt somehow became null/undefined, this is an error state.
-                 // Setting to now() might be incorrect, but prevents Firestore error.
                  console.error("createdAt field is missing or invalid during undo. Setting to current time as fallback.");
                  stateToRestore.createdAt = Timestamp.now();
              }
 
-             // Convert JS Dates back to Timestamps if any exist (less likely with deep copy)
              for (const key in stateToRestore) {
                  if (stateToRestore[key] instanceof Date) {
                      stateToRestore[key] = Timestamp.fromDate(stateToRestore[key]);
                  }
              }
 
-            // Remove id if it exists (shouldn't be set directly)
             delete stateToRestore.id;
 
             const batch = writeBatch(db);
-            batch.set(containerRef, stateToRestore); // Use set (overwrite) for undo
+            batch.set(containerRef, stateToRestore);
             batch.delete(doc(db, eventsPath, lastEvent.id));
             await batch.commit();
             addToast("Last update has been successfully undone.", 'success');
@@ -566,7 +547,7 @@ export default function ContainerModal({
     };
 
     const handlePierResponse = async (isAccepted) => {
-         if (!container) return; // Add check
+         if (!container) return;
         if (isAccepted) {
             setIsSaving(true);
             const batch = writeBatch(db);
@@ -574,16 +555,14 @@ export default function ContainerModal({
             try {
                 const archiveRef = doc(db, archivePath, container.id);
                 const now = Timestamp.now();
-                // Safely calculate daysInYard
                 const daysInYard = calculateDaysBetween(container.createdAt, now);
 
                 const archivedData = { ...container, status: 'Pier Accepted', archivedAt: now, daysInYard };
-                // Ensure createdAt is carried over correctly
-                if (container.createdAt instanceof Timestamp || (container.createdAt && typeof container.createdAt.seconds === 'number')) { // More robust check
+                if (container.createdAt instanceof Timestamp || (container.createdAt && typeof container.createdAt.seconds === 'number')) {
                     archivedData.createdAt = container.createdAt;
                 } else {
                      console.warn("createdAt missing or invalid when archiving, using current time as fallback for daysInYard calculation basis.");
-                     archivedData.createdAt = now; // Fallback, though daysInYard might be inaccurate
+                     archivedData.createdAt = now;
                 }
 
 
@@ -606,7 +585,7 @@ export default function ContainerModal({
     };
 
     const handleReturnToTilter = async () => {
-        if (!container) return; // Add check
+        if (!container) return;
         setIsSaving(true);
         const containerRef = doc(db, containersPath, container.id);
         const newStatus = 'New';
@@ -626,7 +605,7 @@ export default function ContainerModal({
     };
 
     const handleNeedsUpdatesAfterDenial = async () => {
-         if (!container) return; // Add check
+         if (!container) return;
         setIsSaving(true);
         const containerRef = doc(db, containersPath, container.id);
         const newStatus = 'Denied - Awaiting Update';
@@ -646,7 +625,7 @@ export default function ContainerModal({
     };
 
     const handleRevive = async () => {
-        if (!container) return; // Add check
+        if (!container) return;
         setIsSaving(true);
         const batch = writeBatch(db);
         const liveRef = doc(db, containersPath, container.id);
@@ -655,13 +634,11 @@ export default function ContainerModal({
         const revivedData = { ...container, status: 'Revived - Awaiting Update', lastUpdate: Timestamp.now() };
         delete revivedData.archivedAt;
         delete revivedData.daysInYard;
-        // Ensure createdAt is preserved as a Timestamp
          if (!(revivedData.createdAt instanceof Timestamp) && typeof revivedData.createdAt?.seconds === 'number') {
-             // If it looks like a Firestore Timestamp object from JSON.stringify, convert it back
              revivedData.createdAt = Timestamp.fromMillis(revivedData.createdAt.seconds * 1000);
          } else if (!(revivedData.createdAt instanceof Timestamp)) {
              console.warn("createdAt was not a Timestamp during revive, using current time as fallback.");
-             revivedData.createdAt = Timestamp.now(); // Fallback if conversion fails
+             revivedData.createdAt = Timestamp.now();
          }
 
 
@@ -686,50 +663,44 @@ export default function ContainerModal({
         if (isNew && formData.booking) {
             return openBookings.find(b => b.id === formData.booking)?.type || null;
         }
-        // If editing, find the booking associated with the container
         if (!isNew && container?.booking) {
              const currentBooking = [...openBookings, ...allArchivedContainers].find(b => b.id === container.booking);
              return currentBooking?.type || null;
         }
         return null;
-    }, [formData.booking, openBookings, isNew, container, allArchivedContainers]); // Added container and allArchivedContainers
+    }, [formData.booking, openBookings, isNew, container, allArchivedContainers]);
 
     const availableStatuses = useMemo(() => {
         const statuses = CONTAINER_STATUSES.filter(s => s.isDispatchOption);
-        const currentStatus = formData?.status; // Use formData's status
+        const currentStatus = formData?.status;
         const isCurrentStatusInList = currentStatus && statuses.some(s => s.label === currentStatus);
 
         if (currentStatus && !isCurrentStatusInList) {
             const currentStatusInfo = CONTAINER_STATUSES.find(s => s.label === currentStatus) || { emoji: '📍', label: currentStatus };
-            // Ensure the current status object has the required keys, even if custom
             const statusToAdd = { emoji: '📍', label: currentStatus, isUpdateOption: true, isDispatchOption: true, ...currentStatusInfo };
              statuses.unshift(statusToAdd);
         }
         return statuses;
-    }, [formData?.status]); // Depend on formData's status
+    }, [formData?.status]);
 
     const renderContent = () => {
-        // More robust loading check
+        // More robust loading check: Ensure formData is populated for existing containers
         if (!isNew && !formData.id) {
-            // Add a specific check for the case where container prop exists but formData hasn't synced yet
              if(container && !formData.id) {
                  return <div className="p-6 text-center text-gray-400">Loading container details...</div>;
              }
-             // Handle case where container prop itself might be missing initially
              return <div className="p-6 text-center text-gray-400">Waiting for container data...</div>;
         }
         if (isArchived) {
-             // Ensure container exists for archived view
              if (!container) return <div className="p-6 text-center text-gray-400">Loading archived details...</div>;
              return (
                 <div className="flex flex-col lg:flex-row">
                     <div className="p-4 lg:w-1/2 space-y-3">
                         <h3 className="text-lg font-semibold text-center mb-4">Archived Container Details</h3>
                         {Object.entries(container).map(([key, value]) => {
-                           if (typeof value !== 'object' || value === null || value instanceof Timestamp) { // Render Timestamps too
-                                // Format Timestamps nicely
+                           if (typeof value !== 'object' || value === null || value instanceof Timestamp) {
                                 let displayValue = String(value);
-                                const dateValue = safeToDate(value); // Use helper
+                                const dateValue = safeToDate(value);
                                 if (dateValue) {
                                     displayValue = dateValue.toLocaleString();
                                 }
@@ -775,6 +746,7 @@ export default function ContainerModal({
         if (isNew) {
             return (
                 <>
+                    {/* The CameraScanner component is no longer used, so it's removed from here */}
                     <form onSubmit={handleSubmit} className="p-4 space-y-4">
                         <input type="file" ref={scanFileInputRef} onChange={handleImageProcess} className="hidden" accept="image/*" capture="environment" />
                         <input type="file" ref={uploadFileInputRef} onChange={handleImageProcess} className="hidden" accept="image/*" />
