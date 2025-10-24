@@ -18,7 +18,7 @@ import ConfirmationModal from './ConfirmationModal';
 // CameraScanner component is no longer used, so we can remove the import.
 // import CameraScanner from './CameraScanner'; 
 import { CONTAINER_STATUSES } from '../constants';
-import { UndoIcon, CameraIcon, UploadIcon } from '../icons';
+import { UndoIcon, CameraIcon, UploadIcon, PencilIcon } from '../icons';
 
 // Helper function to safely convert potential Timestamps to Date objects
 const safeToDate = (timestamp) => {
@@ -101,6 +101,7 @@ export default function ContainerModal({
     const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [denialStep, setDenialStep] = useState(null);
     const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
+    const [isEditingCoreDetails, setIsEditingCoreDetails] = useState(false); // New state
     // const [isScannerOpen, setIsScannerOpen] = useState(false); // Removed as CameraScanner component is removed
     const uploadFileInputRef = useRef(null); // Separate ref for upload
     const scanFileInputRef = useRef(null);   // Separate ref for camera scan
@@ -145,7 +146,28 @@ export default function ContainerModal({
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+        
+        // Create a new copy of formData to modify
+        const newFormData = { ...formData, [name]: type === 'checkbox' ? checked : value };
+
+        // If the booking is changed, automatically update the 'bookedFor' type
+        if (name === 'booking') {
+            // Find the booking from the list of open bookings
+            const selectedBooking = openBookings.find(b => b.id === value);
+            // If the user selects the original booking (which might be archived), find it in all containers
+            const originalBooking = [...openBookings, ...allArchivedContainers].find(b => b.id === value);
+            
+            if (selectedBooking) {
+                newFormData.bookedFor = selectedBooking.type || 'N/A';
+            } else if (originalBooking) {
+                // Allow re-selecting the original booking
+                newFormData.bookedFor = originalBooking.type || 'N/A';
+            } else {
+                newFormData.bookedFor = 'N/A';
+            }
+        }
+        
+        setFormData(newFormData);
     };
 
      const fileToBase64 = (file) =>
@@ -398,7 +420,7 @@ export default function ContainerModal({
 
     // ... (rest of handlers remain unchanged, ensure they also check if 'container' exists before using it) ...
     const handleDelete = async () => {
-        if (!container) return;
+        if (!container) return; // Add check
          try {
             await deleteDoc(doc(db, containersPath, container.id));
             const eventsQuery = query(collection(db, eventsPath), where("containerId", "==", container.id));
@@ -450,7 +472,7 @@ export default function ContainerModal({
             addToast("Failed to mark as loaded.", 'error');
         } finally { setIsSaving(false); }
     };
-
+    
     const handleAssignDriver = async (e) => {
         e.preventDefault();
          if (!container) return;
@@ -583,7 +605,7 @@ export default function ContainerModal({
             setDenialStep('choose');
         }
     };
-
+    
     const handleReturnToTilter = async () => {
         if (!container) return;
         setIsSaving(true);
@@ -603,7 +625,7 @@ export default function ContainerModal({
             setIsSaving(false);
         }
     };
-
+    
     const handleNeedsUpdatesAfterDenial = async () => {
          if (!container) return;
         setIsSaving(true);
@@ -663,12 +685,13 @@ export default function ContainerModal({
         if (isNew && formData.booking) {
             return openBookings.find(b => b.id === formData.booking)?.type || null;
         }
-        if (!isNew && container?.booking) {
-             const currentBooking = [...openBookings, ...allArchivedContainers].find(b => b.id === container.booking);
-             return currentBooking?.type || null;
+        // If editing, use formData.booking to find the type
+        if (!isNew && formData.booking) {
+             const currentBooking = [...openBookings, ...allContainers, ...allArchivedContainers].find(b => b.id === formData.booking);
+             return currentBooking?.type || container.bookedFor || 'N/A'; // Fallback to container's original bookedFor
         }
-        return null;
-    }, [formData.booking, openBookings, isNew, container, allArchivedContainers]);
+        return container?.bookedFor || null; // Fallback to original container prop
+    }, [formData.booking, openBookings, isNew, container, allContainers, allArchivedContainers]);
 
     const availableStatuses = useMemo(() => {
         const statuses = CONTAINER_STATUSES.filter(s => s.isDispatchOption);
@@ -681,7 +704,7 @@ export default function ContainerModal({
              statuses.unshift(statusToAdd);
         }
         return statuses;
-    }, [formData?.status]);
+    }, [formData?.status]); // Depend on formData's status
 
     const renderContent = () => {
         // More robust loading check: Ensure formData is populated for existing containers
@@ -914,6 +937,38 @@ export default function ContainerModal({
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
                      {/* Use formData values for the form, provide defaults */}
                     <InputField label="Container #" name="id" value={formData.id || ''} disabled={true} />
+                    
+                    {/* New Tare Weight Field */}
+                    <InputField 
+                        label="Tare Weight" 
+                        name="tareWeight" 
+                        type="number" 
+                        value={formData.tareWeight || 0} 
+                        onChange={handleChange} 
+                        disabled={!isEditingCoreDetails}
+                        className={isEditingCoreDetails ? "ring-2 ring-yellow-500" : ""} // Highlight if editable
+                    />
+
+                    {/* New Booking # Field */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Booking #</label>
+                        <select 
+                            name="booking" 
+                            value={formData.booking || ''} 
+                            onChange={handleChange} 
+                            className={`w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed ${isEditingCoreDetails ? "ring-2 ring-yellow-500" : ""}`}
+                            disabled={!isEditingCoreDetails}
+                        >
+                            {/* Ensure the original booking is always an option */}
+                            <option value={container.booking}>{container.booking} (Current)</option>
+                            {openBookings.map(b => (
+                                // Don't show the current booking twice
+                                b.id !== container.booking &&
+                                <option key={b.id} value={b.id}>{b.id} ({b.type})</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <InputField label="Container Type" name="bookedFor" value={formData.bookedFor || ''} disabled={true} />
 
                     <div>
@@ -951,6 +1006,18 @@ export default function ContainerModal({
                         <div>
                             <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm">Delete</button>
                              <button type="button" onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo Last Update</button>
+                             {/* New Edit Core Details Button */}
+                            {!isEditingCoreDetails && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => setIsEditingCoreDetails(true)} 
+                                    title="Edit Core Details"
+                                    className="flex items-center py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm"
+                                >
+                                    <PencilIcon />
+                                    Edit Core
+                                </button>
+                            )}
                         </div>
                         <div className="flex gap-3">
                             <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
@@ -969,8 +1036,8 @@ export default function ContainerModal({
                                         <p className="font-bold text-gray-200">{event.details.action}</p>
                                         {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
                                         <p className="text-xs text-gray-500 text-right mt-1">{eventDate ? eventDate.toLocaleString() : 'Invalid Date'}</p>
-                                    </div>
-                                );
+                                </div>
+                            );
                             })
                         ) : (
                             <p className="text-gray-500">No events found for this container.</p>
