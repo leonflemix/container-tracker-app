@@ -69,7 +69,8 @@ export default function ContainerModal({
             return {
                 id: '',
                 tareWeight: 0,
-                booking: preselectedBooking || ''
+                booking: preselectedBooking || '',
+                status: 'New' // Ensure 'New' status is set initially
             };
         } else if (container) { // Ensure container exists on initial render
             return {
@@ -133,8 +134,12 @@ export default function ContainerModal({
              if(preselectedBooking && formData.booking !== preselectedBooking) {
                  setFormData(prev => ({ ...prev, booking: preselectedBooking }));
              }
+             // Ensure status is 'New' if formData somehow lost it (less likely now)
+             if (formData.status !== 'New') {
+                 setFormData(prev => ({...prev, status: 'New'}));
+             }
         }
-    }, [container, isNew, preselectedBooking, formData.id]); // Removed formData.booking dependency
+    }, [container, isNew, preselectedBooking, formData.id, formData.booking, formData.status]); // Add formData.status
 
 
     const isAtLocation = useMemo(() => {
@@ -291,10 +296,11 @@ export default function ContainerModal({
             }
         }
         
-        // Ensure formData is populated before checking specific fields
+        // Ensure formData is populated before checking specific fields, especially for new containers
         if (!formData.status) {
              addToast("Form data is not ready.", 'error');
-             return; // Prevent submission if formData isn't loaded
+             console.error("Attempted to submit with missing status in formData", formData);
+             return; // Prevent submission if formData isn't loaded correctly
         }
 
         if (formData.status === 'ALL GOOD, BOOK FOR DELIVERY') {
@@ -321,7 +327,7 @@ export default function ContainerModal({
                     seal: '',
                     booking: formData.booking,
                     bookedFor: selectedBooking?.type || 'N/A',
-                    status: 'New',
+                    status: 'New', // Status is correctly set here
                     createdAt: Timestamp.now(), // Use Firestore Timestamp for new containers
                     lastUpdate: Timestamp.now(),
                     truck: '',
@@ -396,6 +402,7 @@ export default function ContainerModal({
         } finally { setIsSaving(false); }
     };
 
+    // ... (rest of handlers remain unchanged, ensure they also check if 'container' exists before using it) ...
     const handleDelete = async () => {
         if (!container) return; // Add check
          try {
@@ -572,12 +579,13 @@ export default function ContainerModal({
 
                 const archivedData = { ...container, status: 'Pier Accepted', archivedAt: now, daysInYard };
                 // Ensure createdAt is carried over correctly
-                if (container.createdAt instanceof Timestamp) {
+                if (container.createdAt instanceof Timestamp || (container.createdAt && typeof container.createdAt.seconds === 'number')) { // More robust check
                     archivedData.createdAt = container.createdAt;
                 } else {
                      console.warn("createdAt missing or invalid when archiving, using current time as fallback for daysInYard calculation basis.");
                      archivedData.createdAt = now; // Fallback, though daysInYard might be inaccurate
                 }
+
 
                 batch.set(archiveRef, archivedData);
                 batch.delete(containerRef);
@@ -648,9 +656,12 @@ export default function ContainerModal({
         delete revivedData.archivedAt;
         delete revivedData.daysInYard;
         // Ensure createdAt is preserved as a Timestamp
-         if (!(revivedData.createdAt instanceof Timestamp)) {
-             console.warn("createdAt was not a Timestamp during revive, attempting conversion or fallback.");
-             revivedData.createdAt = container.createdAt instanceof Timestamp ? container.createdAt : Timestamp.now();
+         if (!(revivedData.createdAt instanceof Timestamp) && typeof revivedData.createdAt?.seconds === 'number') {
+             // If it looks like a Firestore Timestamp object from JSON.stringify, convert it back
+             revivedData.createdAt = Timestamp.fromMillis(revivedData.createdAt.seconds * 1000);
+         } else if (!(revivedData.createdAt instanceof Timestamp)) {
+             console.warn("createdAt was not a Timestamp during revive, using current time as fallback.");
+             revivedData.createdAt = Timestamp.now(); // Fallback if conversion fails
          }
 
 
@@ -927,7 +938,7 @@ export default function ContainerModal({
                      {/* Use formData values for the form, provide defaults */}
                     <InputField label="Container #" name="id" value={formData.id || ''} disabled={true} />
                     <InputField label="Container Type" name="bookedFor" value={formData.bookedFor || ''} disabled={true} />
-                    
+
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
                         <select name="status" value={formData.status || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -950,9 +961,9 @@ export default function ContainerModal({
                             {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
                         </select>
                     </div>
-                   
+
                     <InputField label="Seal #" name="seal" value={formData.seal || ''} onChange={handleChange} />
-                    
+
                     <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight || 0} onChange={handleChange} />
 
                     <div className="flex flex-col gap-2 mt-2">
