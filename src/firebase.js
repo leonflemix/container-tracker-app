@@ -3,61 +3,31 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, Timestamp } from 'firebase/firestore';
 
-let firebaseConfig = {};
-let app = null; // Initialize as null
-let authInstance = null; // Initialize as null
-let dbInstance = null; // Initialize as null
-let firebaseInitialized = false; // Flag to track initialization
-
+let firebaseConfig;
 try {
-  // 1. Prioritize environment-injected config (Canvas, or Vercel Env Vars parsed into __firebase_config if set up that way)
   if (typeof window !== 'undefined' && typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
-    const configString = window.__firebase_config;
-    // Basic check to ensure it's likely a JSON string
-    if (typeof configString === 'string' && configString.trim().startsWith('{')) {
-       firebaseConfig = JSON.parse(configString);
-       console.log("Using environment-injected Firebase config (__firebase_config).");
-       firebaseInitialized = true;
-    } else {
-        console.warn("__firebase_config is defined but not a valid JSON string. Value:", configString);
-    }
+    firebaseConfig = JSON.parse(window.__firebase_config);
+  } else if (process.env.REACT_APP_FIREBASE_CONFIG) {
+    firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG);
+  } else {
+    console.warn("Firebase config not found. Using placeholder values.");
+    firebaseConfig = {
+      apiKey: "AIzaSyDjM93MuLCX-S8KeZLL_cRe834bmfEWlY8",
+      authDomain: "container-tracker-app-4a7d5.firebaseapp.com",
+      projectId: "container-tracker-app-4a7d5",
+      storageBucket: "container-tracker-app-4a7d5.firebasestorage.app",
+      messagingSenderId: "840635230641",
+      appId: "1:840635230641:web:986f7472c844357b14b590"
+    };
   }
-
-  // 2. Fallback to process.env (for Vercel Environment Variables or local development via .env files)
-  // Make sure this only runs if the first method didn't succeed
-  if (!firebaseInitialized && process.env.REACT_APP_FIREBASE_CONFIG) {
-     try {
-        firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG);
-        console.log("Using Firebase config from REACT_APP_FIREBASE_CONFIG environment variable.");
-        firebaseInitialized = true;
-     } catch (parseError) {
-         console.error("Error parsing REACT_APP_FIREBASE_CONFIG. Make sure it's valid JSON.", parseError);
-     }
-  }
-
-  // Initialize Firebase only if config was successfully loaded and seems valid
-  if (firebaseInitialized && firebaseConfig.apiKey) {
-    app = initializeApp(firebaseConfig);
-    authInstance = getAuth(app);
-    dbInstance = getFirestore(app);
-     console.log("Firebase initialized successfully.");
-  } else if (!firebaseInitialized) {
-    // 3. Log an error only if *no* configuration method worked
-    console.error("Firebase configuration could not be loaded from __firebase_config or REACT_APP_FIREBASE_CONFIG environment variable. Firebase services cannot be initialized.");
-  } else if (!firebaseConfig.apiKey) {
-      console.error("Firebase configuration loaded, but apiKey is missing or invalid. Firebase services cannot be initialized.");
-  }
-
 } catch (error) {
-  console.error("Error during Firebase initialization setup:", error);
-  // Ensure instances remain null if any error occurs during setup
-   app = null;
-   authInstance = null;
-   dbInstance = null;
+  console.error("Error parsing Firebase config:", error);
+  firebaseConfig = { apiKey: "INVALID_CONFIG", authDomain: "", projectId: "" };
 }
 
-// Export potentially null instances. Components using these MUST handle the null case gracefully.
-export const auth = authInstance;
-export const db = dbInstance;
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 export { Timestamp };
 export default app;
+
