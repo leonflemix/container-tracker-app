@@ -19,16 +19,41 @@ import CameraScanner from './CameraScanner';
 import { CONTAINER_STATUSES } from '../constants';
 import { UndoIcon, CameraIcon, UploadIcon } from '../icons';
 
-export default function ContainerModal({ 
-    container, 
-    events, 
-    onClose, 
-    openBookings, 
-    collections, 
-    containersPath, 
-    eventsPath, 
-    archivePath, 
-    isArchived, 
+// Helper function to safely convert potential Timestamps to Date objects
+const safeToDate = (timestamp) => {
+    if (timestamp instanceof Timestamp) {
+        return timestamp.toDate();
+    }
+    // Attempt to handle cases where it might already be a Date or number (seconds)
+    if (timestamp instanceof Date) {
+        return timestamp;
+    }
+     if (timestamp && typeof timestamp.seconds === 'number') {
+        return new Date(timestamp.seconds * 1000);
+    }
+    return null; // Return null if conversion is not possible
+};
+
+// Helper function to calculate days between two dates (Date objects or Timestamps)
+const calculateDaysBetween = (start, end) => {
+    const startDate = safeToDate(start);
+    const endDate = safeToDate(end);
+    if (!startDate || !endDate) return 0; // Or handle as error/unknown
+    const oneDay = 1000 * 60 * 60 * 24;
+    return Math.max(0, Math.floor((endDate - startDate) / oneDay)); // Ensure non-negative
+};
+
+
+export default function ContainerModal({
+    container,
+    events,
+    onClose,
+    openBookings,
+    collections,
+    containersPath,
+    eventsPath,
+    archivePath,
+    isArchived,
     addToast,
     bookingsPath,
     archivedBookingsPath,
@@ -38,7 +63,7 @@ export default function ContainerModal({
     preselectedBooking
 }) {
     const isNew = !container;
-    // Initialize formData based on whether it's a new container or an existing one
+    // Initialize formData directly based on props using the useState initializer function
     const [formData, setFormData] = useState(() => {
         if (isNew) {
             return {
@@ -46,7 +71,7 @@ export default function ContainerModal({
                 tareWeight: 0,
                 booking: preselectedBooking || ''
             };
-        } else if (container) {
+        } else if (container) { // Ensure container exists on initial render
             return {
                 id: container.id || '',
                 status: container.status || 'New',
@@ -60,11 +85,14 @@ export default function ContainerModal({
                 bookedFor: container.bookedFor || '',
                 hasHolesBeforeSquish: container.hasHolesBeforeSquish || false,
                 hasHolesAfterSquish: container.hasHolesAfterSquish || false,
+                // Store timestamps directly if they exist, otherwise null/undefined is fine here
+                createdAt: container.createdAt,
+                lastUpdate: container.lastUpdate
             };
         }
-        return {}; // Default empty if container is somehow undefined initially
+        return {}; // Default empty
     });
-    
+
     const [isSaving, setIsSaving] = useState(false);
     const [selectedLocation, setSelectedLocation] = useState('');
     const [selectedDriver, setSelectedDriver] = useState('');
@@ -72,18 +100,16 @@ export default function ContainerModal({
     const [denialStep, setDenialStep] = useState(null);
     const [isReviveConfirmOpen, setReviveConfirmOpen] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
-    const fileInputRef = useRef(null);
     const uploadFileInputRef = useRef(null); // Separate ref for upload
     const scanFileInputRef = useRef(null);   // Separate ref for camera scan
 
     // Effect to re-synchronize formData IF the container prop actually changes ID
-    // This handles cases where the modal might remain open but the selected container changes (less likely with key prop, but safer)
-    // Or if the initial container prop was null/undefined and then populated.
+    // or if the initial container prop was null/undefined and then populated.
      useEffect(() => {
-        // Only run if not a new container and if the container prop is valid
         if (!isNew && container) {
-            // Check if the formData ID doesn't match the prop ID, indicating a change
+            // Update formData only if the container ID is different from the current formData ID
              if (!formData.id || formData.id !== container.id) {
+                console.log("Syncing formData with new container prop:", container.id); // Debug log
                 setFormData({
                     id: container.id || '',
                     status: container.status || 'New',
@@ -97,19 +123,23 @@ export default function ContainerModal({
                     bookedFor: container.bookedFor || '',
                     hasHolesBeforeSquish: container.hasHolesBeforeSquish || false,
                     hasHolesAfterSquish: container.hasHolesAfterSquish || false,
+                    // Store timestamps directly
+                    createdAt: container.createdAt,
+                    lastUpdate: container.lastUpdate
                 });
             }
         } else if (isNew) {
-             // Ensure preselectedBooking is set if provided
+             // Ensure preselectedBooking is set if provided and different
              if(preselectedBooking && formData.booking !== preselectedBooking) {
                  setFormData(prev => ({ ...prev, booking: preselectedBooking }));
              }
         }
-    }, [container, isNew, preselectedBooking, formData.id]); // Keep formData.id dependency
+    }, [container, isNew, preselectedBooking, formData.id]); // Removed formData.booking dependency
 
 
     const isAtLocation = useMemo(() => {
-        if (!container || !collections.locations) return false;
+         // Use optional chaining for safety
+        if (!container?.status || !collections.locations) return false;
         return collections.locations.some(loc => loc.location === container.status);
     }, [container, collections.locations]);
 
@@ -160,7 +190,7 @@ export default function ContainerModal({
         processOcrText(text);
     };
 
-    const handleImageProcess = async (event) => { // Renamed from handleImageUpload for clarity
+    const handleImageProcess = async (event) => { // Renamed from handle
         const file = event.target.files[0];
         if (!file) return;
 
@@ -213,9 +243,9 @@ export default function ContainerModal({
             }
 
 
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ error: { message: response.statusText } })); // Graceful error parsing
-                throw new Error(`API Error: ${errorBody.error?.message || response.statusText}`);
+            if (!response || !response.ok) { // Check if response exists before accessing ok
+                const errorBody = response ? await response.json().catch(() => ({ error: { message: response.statusText } })) : { error: { message: "Network error or no response"} }; // Graceful error parsing
+                throw new Error(`API Error: ${errorBody.error?.message || response?.statusText || "Unknown fetch error"}`);
             }
 
             const result = await response.json();
@@ -292,7 +322,7 @@ export default function ContainerModal({
                     booking: formData.booking,
                     bookedFor: selectedBooking?.type || 'N/A',
                     status: 'New',
-                    createdAt: Timestamp.now(),
+                    createdAt: Timestamp.now(), // Use Firestore Timestamp for new containers
                     lastUpdate: Timestamp.now(),
                     truck: '',
                     deliveryDriver: '',
@@ -324,16 +354,33 @@ export default function ContainerModal({
                      return;
                  }
                 const changes = [];
-                for (const key in formData) {
-                     // Check if the key exists in the original container or is a new key in formData
-                    if (Object.hasOwnProperty.call(formData, key) && formData[key] !== container[key]) {
-                         changes.push(`${key} changed from '${container[key] === undefined ? '' : container[key]}' to '${formData[key]}'`);
+                 // Prepare data for update, ensuring timestamps are preserved or updated correctly
+                const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
+                // Explicitly keep the original createdAt timestamp if it exists
+                if (container.createdAt) {
+                    dataToUpdate.createdAt = container.createdAt;
+                } else {
+                    // Fallback if somehow createdAt was missing (shouldn't happen for existing)
+                    dataToUpdate.createdAt = Timestamp.now();
+                    console.warn("Original createdAt missing, setting to now for container:", container.id);
+                }
+
+
+                for (const key in dataToUpdate) {
+                     // Check changes against the original container prop
+                     if (Object.hasOwnProperty.call(dataToUpdate, key) && dataToUpdate[key] !== container[key]) {
+                        // Skip comparing timestamp objects directly if they are both timestamps
+                        if (!(container[key] instanceof Timestamp && dataToUpdate[key] instanceof Timestamp && container[key].isEqual(dataToUpdate[key]))) {
+                             changes.push(`${key} changed from '${container[key] === undefined ? '' : container[key]}' to '${dataToUpdate[key]}'`);
+                         }
                     }
                 }
+
+                 // Remove id from the update payload
+                delete dataToUpdate.id;
+
                 if (changes.length > 0) {
-                    const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
-                    delete dataToUpdate.id; // ID should not be updated
-                    batch.set(containerRef, dataToUpdate, { merge: true });
+                    batch.set(containerRef, dataToUpdate, { merge: true }); // Use merge: true
                     const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Container updated', changes: changes.join('; ') } };
                     batch.set(doc(collection(db, eventsPath)), eventData);
                     addToast(`Container ${container.id.toUpperCase()} updated successfully!`, 'success');
@@ -345,11 +392,10 @@ export default function ContainerModal({
             onClose();
         } catch (error) {
             console.error("Error saving container:", error);
-            addToast("Failed to save container. See console for details.", 'error');
+            addToast(`Failed to save container: ${error.message}`, 'error'); // Show more specific error
         } finally { setIsSaving(false); }
     };
-    
-    // ... (rest of handlers remain unchanged, ensure they also check if 'container' exists before using it) ...
+
     const handleDelete = async () => {
         if (!container) return; // Add check
          try {
@@ -366,7 +412,7 @@ export default function ContainerModal({
             addToast("Failed to delete container.", 'error');
         }
     };
-    
+
     const handleLocationSubmit = async (e) => {
         e.preventDefault();
         if (!container) return; // Add check
@@ -403,7 +449,7 @@ export default function ContainerModal({
             addToast("Failed to mark as loaded.", 'error');
         } finally { setIsSaving(false); }
     };
-    
+
     const handleAssignDriver = async (e) => {
         e.preventDefault();
          if (!container) return; // Add check
@@ -436,31 +482,79 @@ export default function ContainerModal({
         setIsSaving(true);
         try {
             const containerRef = doc(db, containersPath, container.id);
+            // Start with a deep copy of the current container state from the prop
+            // This preserves existing Timestamps
+            let stateToRestore = JSON.parse(JSON.stringify(container));
+
             const changesToRevert = lastEvent.details.changes.split('; ');
-            let stateToRestore = { ...container };
+
             changesToRevert.forEach(change => {
-                const match = change.match(/(.+) changed from '(.*)' to '(.*)'/);
+                const match = change.match(/(.+?) changed from '(.*?)' to '(.*?)'$/); // Use non-greedy match
                 if (match) {
-                    const [, key, fromValue] = match;
-                    if (key in stateToRestore) {
-                        const originalType = typeof stateToRestore[key];
-                        if (originalType === 'boolean') stateToRestore[key] = (fromValue === 'true');
-                        else if (originalType === 'number') stateToRestore[key] = parseFloat(fromValue) || 0;
-                        else stateToRestore[key] = fromValue;
+                    const [, key, fromValueStr] = match;
+                    const trimmedKey = key.trim(); // Trim key just in case
+
+                    if (Object.hasOwnProperty.call(stateToRestore, trimmedKey)) {
+                         // Attempt to parse the 'fromValueStr' back to its likely original type
+                         let originalValue;
+                         const currentValue = container[trimmedKey]; // Compare type with current value
+
+                         if (typeof currentValue === 'boolean') {
+                             originalValue = (fromValueStr === 'true');
+                         } else if (typeof currentValue === 'number') {
+                             originalValue = parseFloat(fromValueStr) || 0;
+                         } else if (currentValue instanceof Timestamp || trimmedKey === 'createdAt' || trimmedKey === 'lastUpdate' || trimmedKey === 'archivedAt') {
+                             // If the original value was likely a Timestamp, try to parse it back.
+                             // This is tricky as the string format isn't guaranteed.
+                             // A safer approach might be needed if Timestamps are frequently reverted.
+                             // For now, we'll keep the timestamp from the *current* state if revert fails.
+                             console.warn(`Attempting to revert potential Timestamp field '${trimmedKey}'. String value: '${fromValueStr}'. Reverting may not restore exact time.`);
+                             originalValue = currentValue; // Fallback: keep current timestamp
+                         }
+                         else {
+                              originalValue = fromValueStr; // Default to string
+                         }
+                         stateToRestore[trimmedKey] = originalValue;
+                    } else {
+                         console.warn(`Key "${trimmedKey}" not found in current container state during undo.`);
                     }
+                } else {
+                    console.warn("Could not parse change detail for undo:", change);
                 }
             });
-            stateToRestore.lastUpdate = Timestamp.now();
+
+            // Ensure critical timestamps are valid Firestore Timestamps
+             stateToRestore.lastUpdate = Timestamp.now(); // Always set lastUpdate to now
+             // Ensure createdAt is still a valid Timestamp (it should be from the deep copy)
+             if (!(stateToRestore.createdAt instanceof Timestamp) && container.createdAt instanceof Timestamp) {
+                  console.warn("createdAt was lost during undo, restoring from original prop.");
+                  stateToRestore.createdAt = container.createdAt;
+             } else if (!stateToRestore.createdAt) {
+                 // If createdAt somehow became null/undefined, this is an error state.
+                 // Setting to now() might be incorrect, but prevents Firestore error.
+                 console.error("createdAt field is missing or invalid during undo. Setting to current time as fallback.");
+                 stateToRestore.createdAt = Timestamp.now();
+             }
+
+             // Convert JS Dates back to Timestamps if any exist (less likely with deep copy)
+             for (const key in stateToRestore) {
+                 if (stateToRestore[key] instanceof Date) {
+                     stateToRestore[key] = Timestamp.fromDate(stateToRestore[key]);
+                 }
+             }
+
+            // Remove id if it exists (shouldn't be set directly)
             delete stateToRestore.id;
+
             const batch = writeBatch(db);
-            batch.set(containerRef, stateToRestore);
+            batch.set(containerRef, stateToRestore); // Use set (overwrite) for undo
             batch.delete(doc(db, eventsPath, lastEvent.id));
             await batch.commit();
             addToast("Last update has been successfully undone.", 'success');
             onClose();
         } catch (error) {
             console.error("Error undoing last update:", error);
-            addToast("Failed to undo last update.", 'error');
+            addToast(`Failed to undo last update: ${error.message}`, 'error');
         } finally { setIsSaving(false); }
     };
 
@@ -472,14 +566,22 @@ export default function ContainerModal({
             const containerRef = doc(db, containersPath, container.id);
             try {
                 const archiveRef = doc(db, archivePath, container.id);
-                const createdAt = container.createdAt.seconds;
-                const archivedAt = Timestamp.now().seconds;
-                const daysInYard = Math.floor((archivedAt - createdAt) / (60 * 60 * 24));
+                const now = Timestamp.now();
+                // Safely calculate daysInYard
+                const daysInYard = calculateDaysBetween(container.createdAt, now);
 
-                const archivedData = { ...container, status: 'Pier Accepted', archivedAt: Timestamp.now(), daysInYard };
+                const archivedData = { ...container, status: 'Pier Accepted', archivedAt: now, daysInYard };
+                // Ensure createdAt is carried over correctly
+                if (container.createdAt instanceof Timestamp) {
+                    archivedData.createdAt = container.createdAt;
+                } else {
+                     console.warn("createdAt missing or invalid when archiving, using current time as fallback for daysInYard calculation basis.");
+                     archivedData.createdAt = now; // Fallback, though daysInYard might be inaccurate
+                }
+
                 batch.set(archiveRef, archivedData);
                 batch.delete(containerRef);
-                const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Accepted & Archived' } };
+                const eventData = { containerId: container.id.toUpperCase(), timestamp: now, details: { action: 'Pier Accepted & Archived' } };
                 batch.set(doc(collection(db, eventsPath)), eventData);
                 await batch.commit();
                 addToast('Container accepted by pier and archived.', 'success');
@@ -494,7 +596,7 @@ export default function ContainerModal({
             setDenialStep('choose');
         }
     };
-    
+
     const handleReturnToTilter = async () => {
         if (!container) return; // Add check
         setIsSaving(true);
@@ -514,7 +616,7 @@ export default function ContainerModal({
             setIsSaving(false);
         }
     };
-    
+
     const handleNeedsUpdatesAfterDenial = async () => {
          if (!container) return; // Add check
         setIsSaving(true);
@@ -541,23 +643,29 @@ export default function ContainerModal({
         const batch = writeBatch(db);
         const liveRef = doc(db, containersPath, container.id);
         const archiveRef = doc(db, archivePath, container.id);
-        
+
         const revivedData = { ...container, status: 'Revived - Awaiting Update', lastUpdate: Timestamp.now() };
         delete revivedData.archivedAt;
         delete revivedData.daysInYard;
+        // Ensure createdAt is preserved as a Timestamp
+         if (!(revivedData.createdAt instanceof Timestamp)) {
+             console.warn("createdAt was not a Timestamp during revive, attempting conversion or fallback.");
+             revivedData.createdAt = container.createdAt instanceof Timestamp ? container.createdAt : Timestamp.now();
+         }
+
 
         try {
             batch.set(liveRef, revivedData);
             batch.delete(archiveRef);
             const eventData = { containerId: container.id, timestamp: Timestamp.now(), details: { action: 'Container Revived - Awaiting Update' } };
             batch.set(doc(collection(db, eventsPath)), eventData);
-            
+
             await batch.commit();
             addToast(`Container ${container.id} revived and is awaiting update.`, 'success');
             onClose();
         } catch (error) {
             console.error("Error reviving container:", error);
-            addToast("Failed to revive container.", 'error');
+            addToast(`Failed to revive container: ${error.message}`, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -590,22 +698,24 @@ export default function ContainerModal({
     }, [formData?.status]); // Depend on formData's status
 
     const renderContent = () => {
-        // Initial loading state or if container data somehow isn't ready
-        if (!isNew && (!container || !formData.id)) {
+        // More robust loading check
+        if (!isNew && !formData.id) {
             return <div className="p-6 text-center text-gray-400">Loading container details...</div>;
         }
         if (isArchived) {
+             // Ensure container exists for archived view
+             if (!container) return <div className="p-6 text-center text-gray-400">Loading archived details...</div>;
              return (
                 <div className="flex flex-col lg:flex-row">
                     <div className="p-4 lg:w-1/2 space-y-3">
                         <h3 className="text-lg font-semibold text-center mb-4">Archived Container Details</h3>
-                        {/* Ensure container exists before mapping */}
-                        {container && Object.entries(container).map(([key, value]) => {
-                           if (typeof value !== 'object' || value === null) {
+                        {Object.entries(container).map(([key, value]) => {
+                           if (typeof value !== 'object' || value === null || value instanceof Timestamp) { // Render Timestamps too
                                 // Format Timestamps nicely
                                 let displayValue = String(value);
-                                if (value instanceof Timestamp) {
-                                    displayValue = value.toDate().toLocaleString();
+                                const dateValue = safeToDate(value); // Use helper
+                                if (dateValue) {
+                                    displayValue = dateValue.toLocaleString();
                                 }
                                 return <InputField key={key} label={key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')} value={displayValue} disabled />
                            }
@@ -627,13 +737,16 @@ export default function ContainerModal({
                         <h3 className="text-lg font-semibold mb-3">Event History</h3>
                         <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                             {events.length > 0 ? (
-                                events.map(event => (
-                                    <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
-                                        <p className="font-bold text-gray-200">{event.details.action}</p>
-                                        {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
-                                        <p className="text-xs text-gray-500 text-right mt-1">{(event.timestamp instanceof Date || event.timestamp?.toDate) ? (event.timestamp instanceof Date ? event.timestamp : event.timestamp.toDate()).toLocaleString() : 'Invalid Date'}</p>
-                                    </div>
-                                ))
+                                events.map(event => {
+                                    const eventDate = safeToDate(event.timestamp);
+                                    return (
+                                        <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
+                                            <p className="font-bold text-gray-200">{event.details.action}</p>
+                                            {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
+                                            <p className="text-xs text-gray-500 text-right mt-1">{eventDate ? eventDate.toLocaleString() : 'Invalid Date'}</p>
+                                        </div>
+                                    );
+                                })
                             ) : (
                                 <p className="text-gray-500">No events found for this container.</p>
                             )}
@@ -652,7 +765,7 @@ export default function ContainerModal({
                         <div className="flex justify-between items-end gap-4">
                             <div className="flex-grow">
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Booking # *</label>
-                                <select name="booking" value={formData.booking} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <select name="booking" value={formData.booking || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="">-- Select an Open Booking --</option>
                                     {openBookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
                                 </select>
@@ -668,8 +781,8 @@ export default function ContainerModal({
                         </div>
 
                         {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
-                        <InputField label="Container #" name="id" value={formData.id} onChange={handleChange} required />
-                        <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight} onChange={handleChange} />
+                        <InputField label="Container #" name="id" value={formData.id || ''} onChange={handleChange} required />
+                        <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight || 0} onChange={handleChange} />
                         <div className="pt-4 flex justify-end gap-3">
                             <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
                             <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
@@ -680,10 +793,9 @@ export default function ContainerModal({
                 </>
             );
         }
-        
+
         // --- Render logic for existing containers ---
-        // Ensure container is defined before accessing properties
-        if (!container) return <div className="p-6 text-center text-gray-400">Error: Container data unavailable.</div>; 
+        if (!container) return <div className="p-6 text-center text-gray-400">Error: Container data unavailable.</div>;
 
         if (container.status === 'New') {
             return (
@@ -812,20 +924,20 @@ export default function ContainerModal({
         return (
             <div className="flex flex-col lg:flex-row">
                 <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
-                     {/* Use formData values for the form */}
-                    <InputField label="Container #" name="id" value={formData.id} disabled={true} />
-                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor} disabled={true} />
+                     {/* Use formData values for the form, provide defaults */}
+                    <InputField label="Container #" name="id" value={formData.id || ''} disabled={true} />
+                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor || ''} disabled={true} />
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                        <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select name="status" value={formData.status || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             {availableStatuses.map(s => <option key={s.label} value={s.label}>{s.emoji} {s.label}</option>)}
                         </select>
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Truck/Driver</label>
-                        <select name="truck" value={formData.truck} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select name="truck" value={formData.truck || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="">-- Select Driver --</option>
                             {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
                         </select>
@@ -833,24 +945,24 @@ export default function ContainerModal({
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Chassis</label>
-                        <select name="chassis" value={formData.chassis} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select name="chassis" value={formData.chassis || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="">-- Select Chassis --</option>
                             {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
                         </select>
                     </div>
                    
-                    <InputField label="Seal #" name="seal" value={formData.seal} onChange={handleChange} />
+                    <InputField label="Seal #" name="seal" value={formData.seal || ''} onChange={handleChange} />
                     
-                    <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight} onChange={handleChange} />
+                    <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight || 0} onChange={handleChange} />
 
                     <div className="flex flex-col gap-2 mt-2">
-                        <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={formData.hasHolesBeforeSquish} onChange={handleChange} />
-                        <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={formData.hasHolesAfterSquish} onChange={handleChange} />
+                        <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={!!formData.hasHolesBeforeSquish} onChange={handleChange} />
+                        <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={!!formData.hasHolesAfterSquish} onChange={handleChange} />
                     </div>
                     <div className="pt-4 flex justify-between items-center gap-3">
                         <div>
                             <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm">Delete</button>
-                             <button type="button" onClick={handleUndo} disabled={events.length < 2} className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo Last Update</button>
+                             <button type="button" onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo Last Update</button>
                         </div>
                         <div className="flex gap-3">
                             <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
@@ -862,13 +974,16 @@ export default function ContainerModal({
                     <h3 className="text-lg font-semibold mb-3">Event History</h3>
                     <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                          {events.length > 0 ? (
-                            events.map(event => (
-                                <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
-                                    <p className="font-bold text-gray-200">{event.details.action}</p>
-                                    {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
-                                    <p className="text-xs text-gray-500 text-right mt-1">{(event.timestamp instanceof Date || event.timestamp?.toDate) ? (event.timestamp instanceof Date ? event.timestamp : event.timestamp.toDate()).toLocaleString() : 'Invalid Date'}</p>
-                                </div>
-                            ))
+                            events.map(event => {
+                                 const eventDate = safeToDate(event.timestamp);
+                                return (
+                                    <div key={event.id} className="bg-gray-700 p-3 rounded-md text-sm">
+                                        <p className="font-bold text-gray-200">{event.details.action}</p>
+                                        {event.details.changes && <p className="text-gray-400 text-xs mt-1">{event.details.changes}</p>}
+                                        <p className="text-xs text-gray-500 text-right mt-1">{eventDate ? eventDate.toLocaleString() : 'Invalid Date'}</p>
+                                    </div>
+                                );
+                            })
                         ) : (
                             <p className="text-gray-500">No events found for this container.</p>
                         )}
@@ -887,7 +1002,7 @@ export default function ContainerModal({
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
                 <div className="flex-grow overflow-y-auto">
-                    {/* Render content only when formData is populated for existing containers */}
+                    {/* Render content only when formData is populated for existing containers, or if it's new */}
                     {(isNew || formData.id) ? renderContent() : <div className="p-6 text-center text-gray-400">Loading...</div>}
                 </div>
                  {isDeleteConfirmOpen && (
