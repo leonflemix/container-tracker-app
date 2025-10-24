@@ -295,7 +295,7 @@ export default function ContainerModal({
                 return;
             }
         }
-        
+
         // Ensure formData is populated before checking specific fields, especially for new containers
         if (!formData.status) {
              addToast("Form data is not ready.", 'error');
@@ -711,7 +711,12 @@ export default function ContainerModal({
     const renderContent = () => {
         // More robust loading check
         if (!isNew && !formData.id) {
-            return <div className="p-6 text-center text-gray-400">Loading container details...</div>;
+            // Add a specific check for the case where container prop exists but formData hasn't synced yet
+             if(container && !formData.id) {
+                 return <div className="p-6 text-center text-gray-400">Loading container details...</div>;
+             }
+             // Handle case where container prop itself might be missing initially
+             return <div className="p-6 text-center text-gray-400">Waiting for container data...</div>;
         }
         if (isArchived) {
              // Ensure container exists for archived view
