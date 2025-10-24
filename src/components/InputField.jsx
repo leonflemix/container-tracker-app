@@ -1,3 +1,4 @@
+// File: src/components/InputField.jsx
 import React from 'react';
 export default function InputField({ label, name, type = 'text', value, onChange, required = false, disabled = false }) {
     return (
@@ -16,3 +17,4 @@ export default function InputField({ label, name, type = 'text', value, onChange
         </div>
     );
 }
+

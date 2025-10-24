@@ -1,3 +1,4 @@
+// File: src/components/ReportsPage.jsx
 import React, { useState } from 'react';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -142,3 +143,4 @@ export default function ReportsPage({ archivePath, collections }) {
         </div>
     );
 }
+

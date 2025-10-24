@@ -1,31 +1,38 @@
+// File: src/firebase.js
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, Timestamp } from 'firebase/firestore';
 
-let firebaseConfig;
+let firebaseConfig = {};
+let app;
+let authInstance;
+let dbInstance;
+
 try {
+  // ONLY rely on the config injected by the environment (Canvas, Vercel, etc.)
   if (typeof window !== 'undefined' && typeof window.__firebase_config !== 'undefined' && window.__firebase_config) {
     firebaseConfig = JSON.parse(window.__firebase_config);
-  } else if (process.env.REACT_APP_FIREBASE_CONFIG) {
-    firebaseConfig = JSON.parse(process.env.REACT_APP_FIREBASE_CONFIG);
+    app = initializeApp(firebaseConfig);
+    authInstance = getAuth(app);
+    dbInstance = getFirestore(app);
   } else {
-    console.warn("Firebase config not found. Using placeholder values.");
-    firebaseConfig = {
-      apiKey: "AIzaSyDjM93MuLCX-S8KeZLL_cRe834bmfEWlY8",
-      authDomain: "container-tracker-app-4a7d5.firebaseapp.com",
-      projectId: "container-tracker-app-4a7d5",
-      storageBucket: "container-tracker-app-4a7d5.firebasestorage.app",
-      messagingSenderId: "840635230641",
-      appId: "1:840635230641:web:986f7472c844357b14b590"
-    };
+    // Log an error if the config is missing in a production-like environment
+    console.error("Firebase configuration object (__firebase_config) is missing. Firebase services cannot be initialized.");
+    // Provide non-functional placeholders to prevent immediate crashes elsewhere
+    app = null; 
+    authInstance = null;
+    dbInstance = null;
   }
 } catch (error) {
-  console.error("Error parsing Firebase config:", error);
-  firebaseConfig = { apiKey: "INVALID_CONFIG", authDomain: "", projectId: "" };
+  console.error("Error initializing Firebase:", error);
+   app = null;
+   authInstance = null;
+   dbInstance = null;
 }
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Export potentially null instances. Components using these should handle the null case.
+export const auth = authInstance;
+export const db = dbInstance;
 export { Timestamp };
 export default app;
+
