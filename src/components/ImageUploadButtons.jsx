@@ -1,5 +1,8 @@
 import React from 'react';
-import { CameraIcon, UploadIcon } from '../icons';
+
+// Simple icons fallback if ../icons not available
+const CameraIcon = () => <span aria-hidden>📷</span>;
+const UploadIcon = () => <span aria-hidden>⬆️</span>;
 
 // Renders hidden file inputs and two buttons to trigger them.
 // Props:

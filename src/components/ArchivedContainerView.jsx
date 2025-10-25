@@ -3,7 +3,7 @@ import InputField from './InputField';
 import { UndoIcon } from '../icons';
 import EventHistory from './EventHistory';
 
-export default function ArchivedContainerView({ container, events, isSaving, onClose, setReviveConfirmOpen, handleRevive }) {
+export default function ArchivedContainerView({ container, events, isSaving, onClose, setReviveConfirmOpen }) {
     if (!container) return <div className="p-6 text-center text-gray-400">Loading archived details...</div>;
     return (
         <div className="flex flex-col lg:flex-row">
