@@ -23,11 +23,14 @@ import EventHistory from './EventHistory';
 import useImageProcessing from '../hooks/useImageProcessing';
 import { safeToDate, calculateDaysBetween } from '../utils/dates';
 
-// This file focuses on orchestration and delegates:
-// - OCR + Gemini calls to useImageProcessing
-// - Event history rendering to EventHistory
-// - Image inputs/buttons to ImageUploadButtons
+import NewContainerForm from './NewContainerForm';
+import EditContainerForm from './EditContainerForm';
+import LocationMoveForm from './LocationMoveForm';
+import AssignDriverForm from './AssignDriverForm';
+import AssignedDriverPanel from './AssignedDriverPanel';
+import ArchivedContainerView from './ArchivedContainerView';
 
+// Main controller: keeps state + handlers, delegates UI to smaller components
 export default function ContainerModal({
     container,
     events = [],
@@ -148,7 +151,11 @@ export default function ContainerModal({
         if (e.target) e.target.value = null;
     };
 
-    // --- Save / update / handlers largely unchanged but kept here for context ---
+    // --- All DB handlers are unchanged from the original file ---
+    // For brevity here we keep the same handlers and names as the original file.
+    // (handleSubmit, handleDelete, handleLocationSubmit, handleMarkAsLoaded,
+    // handleAssignDriver, handleUndo, handlePierResponse, handleReturnToTilter,
+    // handleNeedsUpdatesAfterDenial, handleRevive)
     const handleSubmit = async (e) => {
         e.preventDefault();
         const containerId = (isNew ? formData.id : container?.id);
@@ -523,7 +530,7 @@ export default function ContainerModal({
         return statuses;
     }, [formData?.status]);
 
-    // Render content (keeps the same branching logic but uses the new small components)
+    // Render: delegate UI to child components
     const renderContent = () => {
         if (!isNew && !formData.id) {
             if (container && !formData.id) return <div className="p-6 text-center text-gray-400">Loading container details...</div>;
@@ -531,92 +538,44 @@ export default function ContainerModal({
         }
 
         if (isArchived) {
-            if (!container) return <div className="p-6 text-center text-gray-400">Loading archived details...</div>;
-            return (
-                <div className="flex flex-col lg:flex-row">
-                    <div className="p-4 lg:w-1/2 space-y-3">
-                        <h3 className="text-lg font-semibold text-center mb-4">Archived Container Details</h3>
-                        {Object.entries(container).map(([key, value]) => {
-                            if (typeof value !== 'object' || value === null || value?.toDate) {
-                                let displayValue = String(value);
-                                const dateValue = safeToDate(value);
-                                if (dateValue) displayValue = dateValue.toLocaleString();
-                                return <InputField key={key} label={key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')} value={displayValue} disabled />;
-                            }
-                            return null;
-                        })}
-                        <div className="pt-4 flex justify-between items-center gap-3">
-                            <button onClick={() => setReviveConfirmOpen(true)} disabled={isSaving} className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">
-                                <UndoIcon />
-                                Revive Container
-                            </button>
-                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
-                        </div>
-                    </div>
-                    <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
-                        <h3 className="text-lg font-semibold mb-3">Event History</h3>
-                        <EventHistory events={events} />
-                    </div>
-                </div>
-            );
+            return <ArchivedContainerView
+                container={container}
+                events={events}
+                isSaving={isSaving}
+                onClose={onClose}
+                setReviveConfirmOpen={() => setReviveConfirmOpen(true)}
+                handleRevive={handleRevive}
+            />;
         }
 
         if (isNew) {
-            return (
-                <>
-                    <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                        <ImageUploadButtons
-                            scanInputRef={scanFileInputRef}
-                            uploadInputRef={uploadFileInputRef}
-                            onFileChange={handleImageChange}
-                            disabled={isImageProcessing || isSaving}
-                        />
-                        <div className="flex justify-between items-end gap-4">
-                            <div className="flex-grow">
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Booking # *</label>
-                                <select name="booking" value={formData.booking || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">-- Select an Open Booking --</option>
-                                    {openBookings.map(b => <option key={b.id} value={b.id}>{b.id} ({b.type})</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
-                        <InputField label="Container #" name="id" value={formData.id || ''} onChange={handleChange} required />
-                        <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight || 0} onChange={handleChange} />
-                        <div className="pt-4 flex justify-end gap-3">
-                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                            <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                                {isSaving ? 'Saving...' : 'Add Container'}
-                            </button>
-                        </div>
-                    </form>
-                </>
-            );
+            return <NewContainerForm
+                formData={formData}
+                handleChange={handleChange}
+                handleImageChange={handleImageChange}
+                handleSubmit={handleSubmit}
+                openBookings={openBookings}
+                selectedBookingType={selectedBookingType}
+                isImageProcessing={isImageProcessing}
+                isSaving={isSaving}
+                onClose={onClose}
+                scanFileInputRef={scanFileInputRef}
+                uploadFileInputRef={uploadFileInputRef}
+            />;
         }
 
-        // existing container branches (trimmed here but unchanged from original behaviour)
         if (!container) return <div className="p-6 text-center text-gray-400">Error: Container data unavailable.</div>;
 
         if (container.status === 'New') {
-            return (
-                <form onSubmit={handleLocationSubmit} className="p-4 space-y-4">
-                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
-                    <div>
-                        <label htmlFor="location" className="block text-sm font-medium text-gray-300 mb-1">Move to Location *</label>
-                        <select id="location" name="location" value={selectedLocation} onChange={(e) => setSelectedLocation(e.target.value)} required className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- Select a Location --</option>
-                            {collections.locations.map(loc => <option key={loc.docId} value={loc.location}>{loc.location}</option>)}
-                        </select>
-                    </div>
-                    <div className="pt-4 flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                            {isSaving ? 'Saving...' : 'Update Location'}
-                        </button>
-                    </div>
-                </form>
-            );
+            return <LocationMoveForm
+                container={container}
+                collections={collections}
+                selectedLocation={selectedLocation}
+                setSelectedLocation={setSelectedLocation}
+                handleLocationSubmit={handleLocationSubmit}
+                isSaving={isSaving}
+                onClose={onClose}
+            />;
         }
 
         if (isAtLocation) {
@@ -634,131 +593,51 @@ export default function ContainerModal({
         }
 
         if (container.status === 'ALL GOOD, BOOK FOR DELIVERY') {
-            return (
-                <form onSubmit={handleAssignDriver} className="p-4 space-y-4">
-                    <InputField label="Container #" name="id" value={container.id} disabled={true} />
-                    <div>
-                        <label htmlFor="deliveryDriver" className="block text-sm font-medium text-gray-300 mb-1">Assign Delivery Truck/Driver *</label>
-                        <select id="deliveryDriver" name="deliveryDriver" value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} required className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- Select Driver --</option>
-                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
-                        </select>
-                    </div>
-                    <div className="pt-4 flex justify-end gap-3">
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
-                            {isSaving ? 'Saving...' : 'Assign Driver'}
-                        </button>
-                    </div>
-                </form>
-            );
+            return <AssignDriverForm
+                container={container}
+                collections={collections}
+                selectedDriver={selectedDriver}
+                setSelectedDriver={setSelectedDriver}
+                handleAssignDriver={handleAssignDriver}
+                isSaving={isSaving}
+                onClose={onClose}
+            />;
         }
 
         if (container.status && container.status.startsWith('Assigned to Driver')) {
-            const driver = collections.drivers.find(d => d.name === container.deliveryDriver);
-
-            if (denialStep === 'choose') {
-                return (
-                    <div className="p-6 text-center">
-                        <h3 className="text-lg font-semibold mb-4">What is the next step for this denied container?</h3>
-                        <div className="flex justify-center gap-4">
-                            <button onClick={handleReturnToTilter} disabled={isSaving} className="py-2 px-4 bg-orange-600 hover:bg-orange-500 rounded-lg">Return to Tilter/Location</button>
-                            <button onClick={handleNeedsUpdatesAfterDenial} disabled={isSaving} className="py-2 px-4 bg-indigo-600 hover:bg-indigo-500 rounded-lg">Needs Manual Update</button>
-                        </div>
-                    </div>
-                );
-            }
-
-            return (
-                <div className="p-6">
-                    <div className="space-y-3 mb-6">
-                        <h3 className="text-lg font-semibold text-center">{container.status}</h3>
-                        <InputField label="Container #" value={container.id} disabled />
-                        <InputField label="Booking #" value={container.booking} disabled />
-                        {driver && (
-                            <>
-                                <InputField label="Driver ID" value={driver.id} disabled />
-                                <InputField label="Plate" value={driver.plate} disabled />
-                            </>
-                        )}
-                    </div>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <button onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-800 hover:bg-red-700 rounded-lg text-sm">Delete</button>
-                            <button onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo</button>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => handlePierResponse(false)} disabled={isSaving} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg">Denied</button>
-                            <button onClick={() => handlePierResponse(true)} disabled={isSaving} className="py-2 px-4 bg-green-600 hover:bg-green-500 rounded-lg">Accepted</button>
-                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Close</button>
-                        </div>
-                    </div>
-                </div>
-            );
+            return <AssignedDriverPanel
+                container={container}
+                collections={collections}
+                events={events}
+                denialStep={denialStep}
+                setDenialStep={setDenialStep}
+                isSaving={isSaving}
+                setDeleteConfirmOpen={() => setDeleteConfirmOpen(true)}
+                handleUndo={handleUndo}
+                handlePierResponse={handlePierResponse}
+                handleReturnToTilter={handleReturnToTilter}
+                handleNeedsUpdatesAfterDenial={handleNeedsUpdatesAfterDenial}
+                onClose={onClose}
+            />;
         }
 
         // Default: edit form
         return (
             <div className="flex flex-col lg:flex-row">
-                <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
-                    <InputField label="Container #" name="id" value={formData.id || ''} disabled={true} />
-                    <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight || 0} onChange={handleChange} disabled={!isEditingCoreDetails} className={isEditingCoreDetails ? "ring-2 ring-yellow-500" : ""} />
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Booking #</label>
-                        <select name="booking" value={formData.booking || ''} onChange={handleChange} className={`w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed ${isEditingCoreDetails ? "ring-2 ring-yellow-500" : ""}`} disabled={!isEditingCoreDetails}>
-                            <option value={container.booking}>{container.booking} (Current)</option>
-                            {openBookings.map(b => (b.id !== container.booking && <option key={b.id} value={b.id}>{b.id} ({b.type})</option>))}
-                        </select>
-                    </div>
-
-                    <InputField label="Container Type" name="bookedFor" value={formData.bookedFor || ''} disabled={true} />
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                        <select name="status" value={formData.status || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            {availableStatuses.map(s => <option key={s.label} value={s.label}>{s.emoji} {s.label}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Truck/Driver</label>
-                        <select name="truck" value={formData.truck || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- Select Driver --</option>
-                            {collections.drivers.map(d => <option key={d.docId} value={d.name}>{d.name} - {d.plate}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Chassis</label>
-                        <select name="chassis" value={formData.chassis || ''} onChange={handleChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">-- Select Chassis --</option>
-                            {collections.chassis.map(c => <option key={c.docId} value={c.id}>{c.id}</option>)}
-                        </select>
-                    </div>
-
-                    <InputField label="Seal #" name="seal" value={formData.seal || ''} onChange={handleChange} />
-                    <InputField label="Gross Weight" name="grossWeight" type="number" value={formData.grossWeight || 0} onChange={handleChange} />
-
-                    <div className="flex flex-col gap-2 mt-2">
-                        <CheckboxField label="Holes Before Squish" name="hasHolesBeforeSquish" checked={!!formData.hasHolesBeforeSquish} onChange={handleChange} />
-                        <CheckboxField label="Holes After Squish" name="hasHolesAfterSquish" checked={!!formData.hasHolesAfterSquish} onChange={handleChange} />
-                    </div>
-                    <div className="pt-4 flex justify-between items-center gap-3">
-                        <div>
-                            <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm">Delete</button>
-                            <button type="button" onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo Last Update</button>
-                            {!isEditingCoreDetails && (
-                                <button type="button" onClick={() => setIsEditingCoreDetails(true)} title="Edit Core Details" className="flex items-center py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm">
-                                    <PencilIcon /> Edit Core
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex gap-3">
-                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                            <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Changes'}</button>
-                        </div>
-                    </div>
-                </form>
+                <EditContainerForm
+                    formData={formData}
+                    handleChange={handleChange}
+                    isEditingCoreDetails={isEditingCoreDetails}
+                    setIsEditingCoreDetails={setIsEditingCoreDetails}
+                    availableStatuses={availableStatuses}
+                    collections={collections}
+                    openBookings={openBookings}
+                    handleSubmit={handleSubmit}
+                    onClose={onClose}
+                    isSaving={isSaving}
+                    setDeleteConfirmOpen={() => setDeleteConfirmOpen(true)}
+                    handleUndo={handleUndo}
+                />
                 <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
                     <h3 className="text-lg font-semibold mb-3">Event History</h3>
                     <EventHistory events={events} />
