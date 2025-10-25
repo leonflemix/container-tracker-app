@@ -1,17 +1,6 @@
-// File: src/components/ContainerModal.jsx
+// ...existing code...
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { db, Timestamp } from '../firebase';
-import {
-    collection,
-    doc,
-    setDoc,
-    addDoc,
-    deleteDoc,
-    query,
-    where,
-    getDocs,
-    writeBatch
-} from 'firebase/firestore';
+import { Timestamp } from '../firebase';
 import InputField from './InputField';
 import CheckboxField from './CheckboxField';
 import ConfirmationModal from './ConfirmationModal';
@@ -29,6 +18,20 @@ import LocationMoveForm from './LocationMoveForm';
 import AssignDriverForm from './AssignDriverForm';
 import AssignedDriverPanel from './AssignedDriverPanel';
 import ArchivedContainerView from './ArchivedContainerView';
+
+import {
+    createContainerWithBooking,
+    updateContainerWithChanges,
+    deleteContainerAndEvents,
+    moveContainerToLocation,
+    markContainerAsLoaded,
+    assignDriverToContainer,
+    undoLastUpdate,
+    pierAcceptAndArchive,
+    returnToTilter,
+    markDeniedAwaitingUpdate,
+    reviveContainer
+} from '../services/containerService';
 
 // Main controller: keeps state + handlers, delegates UI to smaller components
 export default function ContainerModal({
@@ -151,11 +154,7 @@ export default function ContainerModal({
         if (e.target) e.target.value = null;
     };
 
-    // --- All DB handlers are unchanged from the original file ---
-    // For brevity here we keep the same handlers and names as the original file.
-    // (handleSubmit, handleDelete, handleLocationSubmit, handleMarkAsLoaded,
-    // handleAssignDriver, handleUndo, handlePierResponse, handleReturnToTilter,
-    // handleNeedsUpdatesAfterDenial, handleRevive)
+    // --- Handlers now call service functions ---
     const handleSubmit = async (e) => {
         e.preventDefault();
         const containerId = (isNew ? formData.id : container?.id);
@@ -182,80 +181,26 @@ export default function ContainerModal({
                 return;
             }
         }
-        setIsSaving(true);
-        const containerRef = doc(db, containersPath, containerId.toUpperCase());
-        const batch = writeBatch(db);
 
+        setIsSaving(true);
         try {
             if (isNew) {
                 if (!formData.booking) { addToast("Please select a booking.", 'error'); setIsSaving(false); return; }
-                const selectedBooking = openBookings.find(b => b.id === formData.booking);
-                if (!selectedBooking) {
-                    addToast("Selected booking is not valid or no longer open.", 'error');
-                    setIsSaving(false);
-                    return;
-                }
-                const dataToSave = {
-                    id: formData.id.toUpperCase(),
-                    seal: '',
-                    booking: formData.booking,
-                    bookedFor: selectedBooking?.type || 'N/A',
-                    status: 'New',
-                    createdAt: Timestamp.now(),
-                    lastUpdate: Timestamp.now(),
-                    truck: '',
-                    deliveryDriver: '',
-                    grossWeight: 0,
-                    chassis: '',
-                    tareWeight: formData.tareWeight || 0,
-                    hasHolesBeforeSquish: false,
-                    hasHolesAfterSquish: false,
-                };
-                const eventData = { containerId: formData.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: `Container created with status: New for booking ${formData.booking}` } };
-                batch.set(containerRef, dataToSave);
-                batch.set(doc(collection(db, eventsPath)), eventData);
+                await createContainerWithBooking({
+                    containersPath,
+                    eventsPath,
+                    bookingsPath,
+                    archivedBookingsPath,
+                    formData,
+                    openBookings,
+                    filledBookingCounts
+                });
                 addToast(`Container ${formData.id.toUpperCase()} added successfully!`, 'success');
-
-                const currentFilledCount = filledBookingCounts[selectedBooking.id] || 0;
-                if (currentFilledCount + 1 >= selectedBooking.quantity) {
-                    const bookingToArchiveRef = doc(db, bookingsPath, selectedBooking.id);
-                    const archivedBookingRef = doc(db, archivedBookingsPath, selectedBooking.id);
-                    const archivedBookingData = { ...selectedBooking, archivedAt: Timestamp.now() };
-                    batch.set(archivedBookingRef, archivedBookingData);
-                    batch.delete(bookingToArchiveRef);
-                    addToast(`Booking ${selectedBooking.id} is now full and has been archived.`, 'info');
-                }
             } else {
-                if (!container) {
-                    addToast("Cannot save changes, container data is missing.", 'error');
-                    setIsSaving(false);
-                    return;
-                }
-                const changes = [];
-                const dataToUpdate = { ...formData, lastUpdate: Timestamp.now() };
-                if (container.createdAt) dataToUpdate.createdAt = container.createdAt;
-                else dataToUpdate.createdAt = Timestamp.now();
-
-                for (const key in dataToUpdate) {
-                    if (Object.hasOwnProperty.call(dataToUpdate, key) && dataToUpdate[key] !== container[key]) {
-                        if (!(container[key] instanceof Timestamp && dataToUpdate[key] instanceof Timestamp && container[key].isEqual(dataToUpdate[key]))) {
-                            changes.push(`${key} changed from '${container[key] === undefined ? '' : container[key]}' to '${dataToUpdate[key]}'`);
-                        }
-                    }
-                }
-
-                delete dataToUpdate.id;
-
-                if (changes.length > 0) {
-                    batch.set(containerRef, dataToUpdate, { merge: true });
-                    const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Container updated', changes: changes.join('; ') } };
-                    batch.set(doc(collection(db, eventsPath)), eventData);
-                    addToast(`Container ${container.id.toUpperCase()} updated successfully!`, 'success');
-                } else {
-                    addToast('No changes detected.', 'info');
-                }
+                const result = await updateContainerWithChanges({ containersPath, eventsPath, container, formData });
+                if (result.updated) addToast(`Container ${container.id.toUpperCase()} updated successfully!`, 'success');
+                else addToast(result.message || 'No changes detected.', 'info');
             }
-            await batch.commit();
             onClose();
         } catch (error) {
             console.error("Error saving container:", error);
@@ -265,19 +210,15 @@ export default function ContainerModal({
 
     const handleDelete = async () => {
         if (!container) return;
+        setIsSaving(true);
         try {
-            await deleteDoc(doc(db, containersPath, container.id));
-            const eventsQuery = query(collection(db, eventsPath), where("containerId", "==", container.id));
-            const eventsSnapshot = await getDocs(eventsQuery);
-            const batch = writeBatch(db);
-            eventsSnapshot.docs.forEach(d => batch.delete(d.ref));
-            await batch.commit();
+            await deleteContainerAndEvents({ containersPath, eventsPath, containerId: container.id });
             addToast(`Container ${container.id} and its events were deleted.`, 'success');
             onClose();
         } catch (error) {
             console.error("Error deleting container and its events:", error);
             addToast("Failed to delete container.", 'error');
-        }
+        } finally { setIsSaving(false); }
     };
 
     const handleLocationSubmit = async (e) => {
@@ -285,12 +226,8 @@ export default function ContainerModal({
         if (!container) return;
         if (!selectedLocation) { addToast("Please select a location.", 'error'); return; }
         setIsSaving(true);
-        const containerRef = doc(db, containersPath, container.id.toUpperCase());
         try {
-            const dataToUpdate = { status: selectedLocation, lastUpdate: Timestamp.now() };
-            await setDoc(containerRef, dataToUpdate, { merge: true });
-            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Container moved to location', changes: `Status changed to '${selectedLocation}'` } };
-            await addDoc(collection(db, eventsPath), eventData);
+            await moveContainerToLocation({ containersPath, eventsPath, containerId: container.id, selectedLocation });
             addToast(`Container moved to ${selectedLocation}.`, 'success');
             onClose();
         } catch (error) {
@@ -302,13 +239,8 @@ export default function ContainerModal({
     const handleMarkAsLoaded = async () => {
         if (!container) return;
         setIsSaving(true);
-        const containerRef = doc(db, containersPath, container.id.toUpperCase());
-        const newStatus = 'Loading Complete';
         try {
-            const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
-            await setDoc(containerRef, dataToUpdate, { merge: true });
-            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Container loaded', changes: `Status changed from '${container.status}' to '${newStatus}'` } };
-            await addDoc(collection(db, eventsPath), eventData);
+            await markContainerAsLoaded({ containersPath, eventsPath, containerId: container.id, oldStatus: container.status });
             addToast('Container marked as loaded.', 'success');
             onClose();
         } catch (error) {
@@ -322,13 +254,8 @@ export default function ContainerModal({
         if (!container) return;
         if (!selectedDriver) { addToast("Please select a driver to assign.", 'error'); return; }
         setIsSaving(true);
-        const containerRef = doc(db, containersPath, container.id.toUpperCase());
-        const newStatus = `Assigned to Driver - ${selectedDriver}`;
         try {
-            const dataToUpdate = { status: newStatus, deliveryDriver: selectedDriver, lastUpdate: Timestamp.now() };
-            await setDoc(containerRef, dataToUpdate, { merge: true });
-            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Assigned to delivery driver', changes: `Assigned to ${selectedDriver}` } };
-            await addDoc(collection(db, eventsPath), eventData);
+            await assignDriverToContainer({ containersPath, eventsPath, containerId: container.id, selectedDriver });
             addToast(`Container assigned to ${selectedDriver}.`, 'success');
             onClose();
         } catch (error) {
@@ -348,52 +275,7 @@ export default function ContainerModal({
         }
         setIsSaving(true);
         try {
-            const containerRef = doc(db, containersPath, container.id);
-            let stateToRestore = JSON.parse(JSON.stringify(container));
-            const changesToRevert = lastEvent.details.changes.split('; ');
-            changesToRevert.forEach(change => {
-                const match = change.match(/(.+?) changed from '(.*?)' to '(.*?)'$/);
-                if (match) {
-                    const [, key, fromValueStr] = match;
-                    const trimmedKey = key.trim();
-                    if (Object.hasOwnProperty.call(stateToRestore, trimmedKey)) {
-                        let originalValue;
-                        const currentValue = container[trimmedKey];
-                        if (typeof currentValue === 'boolean') {
-                            originalValue = (fromValueStr === 'true');
-                        } else if (typeof currentValue === 'number') {
-                            originalValue = parseFloat(fromValueStr) || 0;
-                        } else {
-                            originalValue = fromValueStr;
-                        }
-                        stateToRestore[trimmedKey] = originalValue;
-                    } else {
-                        console.warn(`Key "${trimmedKey}" not found in current container state during undo.`);
-                    }
-                } else {
-                    console.warn("Could not parse change detail for undo:", change);
-                }
-            });
-
-            stateToRestore.lastUpdate = Timestamp.now();
-            if (!(stateToRestore.createdAt instanceof Timestamp) && container.createdAt instanceof Timestamp) {
-                stateToRestore.createdAt = container.createdAt;
-            } else if (!stateToRestore.createdAt) {
-                stateToRestore.createdAt = Timestamp.now();
-            }
-
-            for (const key in stateToRestore) {
-                if (stateToRestore[key] instanceof Date) {
-                    stateToRestore[key] = Timestamp.fromDate(stateToRestore[key]);
-                }
-            }
-
-            delete stateToRestore.id;
-
-            const batch = writeBatch(db);
-            batch.set(containerRef, stateToRestore);
-            batch.delete(doc(db, eventsPath, lastEvent.id));
-            await batch.commit();
+            await undoLastUpdate({ containersPath, eventsPath, container, lastEvent });
             addToast("Last update has been successfully undone.", 'success');
             onClose();
         } catch (error) {
@@ -406,23 +288,8 @@ export default function ContainerModal({
         if (!container) return;
         if (isAccepted) {
             setIsSaving(true);
-            const batch = writeBatch(db);
-            const containerRef = doc(db, containersPath, container.id);
             try {
-                const archiveRef = doc(db, archivePath, container.id);
-                const now = Timestamp.now();
-                const daysInYard = calculateDaysBetween(container.createdAt, now);
-                const archivedData = { ...container, status: 'Pier Accepted', archivedAt: now, daysInYard };
-                if (container.createdAt instanceof Timestamp || (container.createdAt && typeof container.createdAt.seconds === 'number')) {
-                    archivedData.createdAt = container.createdAt;
-                } else {
-                    archivedData.createdAt = now;
-                }
-                batch.set(archiveRef, archivedData);
-                batch.delete(containerRef);
-                const eventData = { containerId: container.id.toUpperCase(), timestamp: now, details: { action: 'Pier Accepted & Archived' } };
-                batch.set(doc(collection(db, eventsPath)), eventData);
-                await batch.commit();
+                await pierAcceptAndArchive({ containersPath, eventsPath, archivePath, container });
                 addToast('Container accepted by pier and archived.', 'success');
                 onClose();
             } catch (error) {
@@ -439,13 +306,8 @@ export default function ContainerModal({
     const handleReturnToTilter = async () => {
         if (!container) return;
         setIsSaving(true);
-        const containerRef = doc(db, containersPath, container.id);
-        const newStatus = 'New';
         try {
-            const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
-            await setDoc(containerRef, dataToUpdate, { merge: true });
-            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Denied - Returned to Tilter/Location' } };
-            await addDoc(collection(db, eventsPath), eventData);
+            await returnToTilter({ containersPath, eventsPath, containerId: container.id });
             addToast('Container status reset to New.', 'success');
             onClose();
         } catch (error) {
@@ -459,13 +321,8 @@ export default function ContainerModal({
     const handleNeedsUpdatesAfterDenial = async () => {
         if (!container) return;
         setIsSaving(true);
-        const containerRef = doc(db, containersPath, container.id);
-        const newStatus = 'Denied - Awaiting Update';
         try {
-            const dataToUpdate = { status: newStatus, lastUpdate: Timestamp.now() };
-            await setDoc(containerRef, dataToUpdate, { merge: true });
-            const eventData = { containerId: container.id.toUpperCase(), timestamp: Timestamp.now(), details: { action: 'Pier Denied - Awaiting Further Updates' } };
-            await addDoc(collection(db, eventsPath), eventData);
+            await markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId: container.id });
             addToast('Container marked as "Denied - Awaiting Update".', 'success');
             onClose();
         } catch (error) {
@@ -479,25 +336,8 @@ export default function ContainerModal({
     const handleRevive = async () => {
         if (!container) return;
         setIsSaving(true);
-        const batch = writeBatch(db);
-        const liveRef = doc(db, containersPath, container.id);
-        const archiveRef = doc(db, archivePath, container.id);
-        const revivedData = { ...container, status: 'Revived - Awaiting Update', lastUpdate: Timestamp.now() };
-        delete revivedData.archivedAt;
-        delete revivedData.daysInYard;
-        if (!(revivedData.createdAt instanceof Timestamp) && typeof revivedData.createdAt?.seconds === 'number') {
-            revivedData.createdAt = Timestamp.fromMillis(revivedData.createdAt.seconds * 1000);
-        } else if (!(revivedData.createdAt instanceof Timestamp)) {
-            revivedData.createdAt = Timestamp.now();
-        }
-
         try {
-            batch.set(liveRef, revivedData);
-            batch.delete(archiveRef);
-            const eventData = { containerId: container.id, timestamp: Timestamp.now(), details: { action: 'Container Revived - Awaiting Update' } };
-            batch.set(doc(collection(db, eventsPath)), eventData);
-
-            await batch.commit();
+            await reviveContainer({ containersPath, eventsPath, archivePath, container });
             addToast(`Container ${container.id} revived and is awaiting update.`, 'success');
             onClose();
         } catch (error) {
@@ -677,4 +517,4 @@ export default function ContainerModal({
         </div>
     );
 }
-
+// ...existing code...
