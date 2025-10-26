@@ -51,12 +51,9 @@ const ContainerRow = ({ container, onOpen }) => {
     ) : 'never';
 
     return (
-        <div 
-            onClick={() => onOpen(container)}
-            className="flex justify-between items-center gap-4 py-3 px-4 hover:bg-gray-700 rounded cursor-pointer transition-colors group"
-        >
+        <div className="flex justify-between items-center gap-4 py-3 px-4 hover:bg-gray-700 rounded group">
             <div className="flex-1">
-                <div className="font-semibold text-blue-400 group-hover:text-blue-300">{container.id}</div>
+                <div className="font-semibold text-blue-400">{container.id}</div>
                 <div className="text-sm text-gray-400">Booking: {container.booking || '—'}</div>
             </div>
             <div className="flex-1">
@@ -69,14 +66,12 @@ const ContainerRow = ({ container, onOpen }) => {
                     {timeSince}
                 </div>
             </div>
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
-                    onClick={(e) => { e.stopPropagation(); onOpen(container); }}
-                >
-                    Update
-                </button>
-            </div>
+            <button 
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
+                onClick={() => onOpen(container)}
+            >
+                Update
+            </button>
         </div>
     );
 };
@@ -87,10 +82,15 @@ export default function Dashboard({ containers = [], onOpen = () => {} }) {
     const actionsNeeded = active.filter(c => String(c.status).trim() === 'Loading Complete');
     const readyList = active.filter(c => String(c.status).trim() === 'ALL GOOD, BOOK FOR DELIVERY');
     const assignedList = active.filter(c => String(c.status || '').startsWith('Assigned to Driver'));
+    const needsRepair = active.filter(c => c.hasHolesBeforeSquish || c.hasHolesAfterSquish);
+    const inWorkshop = active.filter(c => String(c.status).trim() === 'IN WORKSHOP');
 
     const renderRow = (c) => (
         <div className="flex justify-between items-center gap-4 py-2 px-3 hover:bg-gray-700 rounded cursor-pointer" onClick={() => onOpen(c)}>
             <div className="font-semibold">{c.id}</div>
+            <div className="text-sm text-gray-300">{c.booking || '—'}</div>
+            <div className="text-sm text-gray-400">{c.truck || c.deliveryDriver || '—'}</div>
+           
             <div className="text-sm text-gray-300">{c.booking || '—'}</div>
             <div className="text-sm text-gray-400">{c.truck || c.deliveryDriver || '—'}</div>
             <div className="text-xs text-gray-500">{safeToDate(c.lastUpdate)?.toLocaleString() || ''}</div>
@@ -182,8 +182,8 @@ export default function Dashboard({ containers = [], onOpen = () => {} }) {
                     ))}
                 </DashboardSection>
 
-                <DashboardSection title="Ready list" subtitle="Containers ready to be assigned" count={readyList.length}>
-                    {readyList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : readyList.sort(sortByLastUpdate).map(container => (
+                <DashboardSection title="Needs Repair" subtitle="Containers with holes before or after squish" count={needsRepair.length} className="bg-red-900/20">
+                    {needsRepair.length === 0 ? <div className="p-3 text-gray-400">No containers need repair</div> : needsRepair.sort(sortByLastUpdate).map(container => (
                         <ContainerRow 
                             key={container.id} 
                             container={container} 
@@ -192,8 +192,28 @@ export default function Dashboard({ containers = [], onOpen = () => {} }) {
                     ))}
                 </DashboardSection>
 
-                <DashboardSection title="Assigned list" subtitle="Containers assigned to a driver" count={assignedList.length}>
-                    {assignedList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : assignedList.sort(sortByLastUpdate).map(container => (
+                <DashboardSection title="In Workshop" subtitle="Containers currently being repaired" count={inWorkshop.length} className="bg-yellow-900/20">
+                    {inWorkshop.length === 0 ? <div className="p-3 text-gray-400">No containers in workshop</div> : inWorkshop.sort(sortByLastUpdate).map(container => (
+                        <ContainerRow 
+                            key={container.id} 
+                            container={container} 
+                            onOpen={onOpen} 
+                        />
+                    ))}
+                </DashboardSection>
+
+                <DashboardSection title="Ready for Assignment" subtitle="Containers ready to be assigned to drivers" count={readyList.length}>
+                    {readyList.length === 0 ? <div className="p-3 text-gray-400">No containers ready</div> : readyList.sort(sortByLastUpdate).map(container => (
+                        <ContainerRow 
+                            key={container.id} 
+                            container={container} 
+                            onOpen={onOpen} 
+                        />
+                    ))}
+                </DashboardSection>
+
+                <DashboardSection title="Currently Assigned" subtitle="Containers assigned to drivers" count={assignedList.length}>
+                    {assignedList.length === 0 ? <div className="p-3 text-gray-400">No assigned containers</div> : assignedList.sort(sortByLastUpdate).map(container => (
                         <ContainerRow 
                             key={container.id} 
                             container={container} 
