@@ -265,3 +265,23 @@ export async function reviveContainer({ containersPath, eventsPath, archivePath,
     await batch.commit();
     return { revived: true };
 }
+
+export async function markContainerAsRepaired({ containersPath, eventsPath, containerId, oldStatus }) {
+    const containerRef = doc(db, containersPath, containerId.toUpperCase());
+    const newStatus = 'Repaired';
+    await setDoc(containerRef, { 
+        status: newStatus, 
+        lastUpdate: Timestamp.now() 
+    }, { merge: true });
+    
+    const eventData = {
+        containerId: containerId.toUpperCase(),
+        timestamp: Timestamp.now(),
+        details: { 
+            action: 'Container repaired', 
+            changes: `Status changed from '${oldStatus}' to '${newStatus}'` 
+        }
+    };
+    await addDoc(collection(db, eventsPath), eventData);
+    return { repaired: true };
+}

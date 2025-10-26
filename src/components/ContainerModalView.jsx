@@ -10,6 +10,7 @@ import AssignDriverForm from './AssignDriverForm';
 import AssignedDriverPanel from './AssignedDriverPanel';
 import ArchivedContainerView from './ArchivedContainerView';
 import ImageUploadButtons from './ImageUploadButtons';
+import WorkshopPanel from './WorkshopPanel';
 
 export default function ContainerModalView(props) {
     const {
@@ -46,6 +47,8 @@ export default function ContainerModalView(props) {
         handleReturnToTilter,
         handleNeedsUpdatesAfterDenial,
         handleRevive,
+        isInWorkshop,
+        handleMarkAsRepaired,
 
         // modal controls
         isDeleteConfirmOpen,
@@ -149,6 +152,15 @@ export default function ContainerModalView(props) {
                 handlePierResponse={handlePierResponse}
                 handleReturnToTilter={handleReturnToTilter}
                 handleNeedsUpdatesAfterDenial={handleNeedsUpdatesAfterDenial}
+                onClose={onClose}
+            />;
+        }
+
+        if (isInWorkshop) {
+            return <WorkshopPanel
+                container={container}
+                isSaving={isSaving}
+                handleMarkAsRepaired={handleMarkAsRepaired}
                 onClose={onClose}
             />;
         }

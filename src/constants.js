@@ -8,7 +8,8 @@ export const CONTAINER_STATUSES = [
     { emoji: '🤛🏻💨👨🏻‍🏭', label: 'NEED SQUISH AND WELDING', isUpdateOption: true, isDispatchOption: true },
     { emoji: '⚖️🤛🏻💨', label: 'NEEDS WEIGHT AND SQUISH', isUpdateOption: true, isDispatchOption: true },
     { emoji: '⚖️🤛🏻💨👨🏻‍🏭', label: 'NEEDS EVERYTHING', isUpdateOption: true, isDispatchOption: true },
-    { emoji: '👨🏻‍🏭🏭', label: 'IN WORKSHOP', isUpdateOption: true, isDispatchOption: true },
+    { emoji: '👨🏻‍🏭', label: 'IN WORKSHOP', isDispatchOption: true, isUpdateOption: true,isSecondaryLocation: true 
+    },
     { emoji: '⚙️', label: 'In Shred Tilter', isUpdateOption: false, isDispatchOption: false },
     { emoji: '⚖️', label: 'In Scale Tilter', isUpdateOption: false, isDispatchOption: false },
     { emoji: '🛤️', label: 'In Track Tilter', isUpdateOption: false, isDispatchOption: false },
@@ -27,5 +28,11 @@ export const CONTAINER_STATUSES = [
     { emoji: '📝', label: 'Docs Issue', isUpdateOption: false, isDispatchOption: false },
     { emoji: '☢️', label: 'Nuclear (On Hold)', isUpdateOption: true, isDispatchOption: false },
     { emoji: '👨‍✈️', label: 'Assigned to Driver', isUpdateOption: false, isDispatchOption: false },
+    { 
+        emoji: '✅', 
+        label: 'Repaired', 
+        isDispatchOption: false,
+        isUpdateOption: true 
+    },
 ];
 

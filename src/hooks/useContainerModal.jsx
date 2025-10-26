@@ -12,7 +12,8 @@ import {
     pierAcceptAndArchive,
     returnToTilter,
     markDeniedAwaitingUpdate,
-    reviveContainer
+    reviveContainer,
+    markContainerAsRepaired
 } from '../services/containerService';
 import { CONTAINER_STATUSES } from '../constants';
 
@@ -106,6 +107,10 @@ export default function useContainerModal(props) {
         if (!container?.status || !collections.locations) return false;
         return collections.locations.some(loc => loc.location === container.status);
     }, [container, collections.locations]);
+
+    const isInWorkshop = useMemo(() => {
+        return container?.status === 'IN WORKSHOP';
+    }, [container]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -328,6 +333,26 @@ export default function useContainerModal(props) {
         }
     };
 
+    const handleMarkAsRepaired = async () => {
+        if (!container) return;
+        setIsSaving(true);
+        try {
+            await markContainerAsRepaired({ 
+                containersPath, 
+                eventsPath, 
+                containerId: container.id, 
+                oldStatus: container.status 
+            });
+            addToast('Container marked as repaired.', 'success');
+            onClose();
+        } catch (error) {
+            console.error("Error marking as repaired:", error);
+            addToast("Failed to mark as repaired.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) return openBookings.find(b => b.id === formData.booking)?.type || null;
         if (!isNew && formData.booking) {
@@ -375,6 +400,7 @@ export default function useContainerModal(props) {
 
         // derived
         isAtLocation,
+        isInWorkshop,
         selectedBookingType,
         availableStatuses,
 
@@ -397,6 +423,7 @@ export default function useContainerModal(props) {
         handlePierResponse,
         handleReturnToTilter,
         handleNeedsUpdatesAfterDenial,
-        handleRevive
+        handleRevive,
+        handleMarkAsRepaired
     };
 }
