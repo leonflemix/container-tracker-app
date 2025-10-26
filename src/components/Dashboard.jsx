@@ -42,6 +42,44 @@ const StatusChart = ({ data }) => {
     );
 };
 
+// Reusable container row component
+const ContainerRow = ({ container, onOpen }) => {
+    const lastUpdate = safeToDate(container.lastUpdate);
+    const timeSince = lastUpdate ? new Intl.RelativeTimeFormat('en').format(
+        Math.round((lastUpdate - new Date()) / (1000 * 60 * 60 * 24)),
+        'days'
+    ) : 'never';
+
+    return (
+        <div 
+            onClick={() => onOpen(container)}
+            className="flex justify-between items-center gap-4 py-3 px-4 hover:bg-gray-700 rounded cursor-pointer transition-colors group"
+        >
+            <div className="flex-1">
+                <div className="font-semibold text-blue-400 group-hover:text-blue-300">{container.id}</div>
+                <div className="text-sm text-gray-400">Booking: {container.booking || '—'}</div>
+            </div>
+            <div className="flex-1">
+                <div className="text-sm text-gray-300">{container.status}</div>
+                <div className="text-xs text-gray-500">{container.truck || container.deliveryDriver || '—'}</div>
+            </div>
+            <div className="text-right">
+                <div className="text-xs text-gray-400">Last Update:</div>
+                <div className="text-xs text-gray-500" title={lastUpdate?.toLocaleString()}>
+                    {timeSince}
+                </div>
+            </div>
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
+                    onClick={(e) => { e.stopPropagation(); onOpen(container); }}
+                >
+                    Update
+                </button>
+            </div>
+        </div>
+    );
+};
 
 export default function Dashboard({ containers = [], onOpen = () => {} }) {
     const active = containers.filter(c => !c.archivedAt);
@@ -81,6 +119,13 @@ export default function Dashboard({ containers = [], onOpen = () => {} }) {
 
         return { totalContainers, chartData, attentionNeeded };
     }, [containers]);
+
+    // Sort by most recent update first
+    const sortByLastUpdate = (a, b) => {
+        const dateA = safeToDate(a.lastUpdate)?.getTime() || 0;
+        const dateB = safeToDate(b.lastUpdate)?.getTime() || 0;
+        return dateB - dateA;
+    };
 
     return (
         <div className="space-y-6 p-4">
@@ -128,15 +173,33 @@ export default function Dashboard({ containers = [], onOpen = () => {} }) {
 
             <div className="grid grid-cols-1 gap-6">
                 <DashboardSection title="Actions Needed" subtitle="Containers after 'loaded' and before 'all good'" count={actionsNeeded.length}>
-                    {actionsNeeded.length === 0 ? <div className="p-3 text-gray-400">No items</div> : actionsNeeded.map(renderRow)}
+                    {actionsNeeded.length === 0 ? <div className="p-3 text-gray-400">No items</div> : actionsNeeded.sort(sortByLastUpdate).map(container => (
+                        <ContainerRow 
+                            key={container.id} 
+                            container={container} 
+                            onOpen={onOpen} 
+                        />
+                    ))}
                 </DashboardSection>
 
                 <DashboardSection title="Ready list" subtitle="Containers ready to be assigned" count={readyList.length}>
-                    {readyList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : readyList.map(renderRow)}
+                    {readyList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : readyList.sort(sortByLastUpdate).map(container => (
+                        <ContainerRow 
+                            key={container.id} 
+                            container={container} 
+                            onOpen={onOpen} 
+                        />
+                    ))}
                 </DashboardSection>
 
                 <DashboardSection title="Assigned list" subtitle="Containers assigned to a driver" count={assignedList.length}>
-                    {assignedList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : assignedList.map(renderRow)}
+                    {assignedList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : assignedList.sort(sortByLastUpdate).map(container => (
+                        <ContainerRow 
+                            key={container.id} 
+                            container={container} 
+                            onOpen={onOpen} 
+                        />
+                    ))}
                 </DashboardSection>
             </div>
         </div>
