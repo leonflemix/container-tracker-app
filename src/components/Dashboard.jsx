@@ -50,6 +50,14 @@ const ContainerRow = ({ container, onOpen }) => {
         'days'
     ) : 'never';
 
+    const handleUpdate = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onOpen && typeof onOpen === 'function') {
+            onOpen(container);
+        }
+    };
+
     return (
         <div className="flex justify-between items-center gap-4 py-3 px-4 hover:bg-gray-700 rounded group">
             <div className="flex-1">
@@ -67,8 +75,9 @@ const ContainerRow = ({ container, onOpen }) => {
                 </div>
             </div>
             <button 
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
-                onClick={() => onOpen(container)}
+                type="button"
+                onClick={handleUpdate}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white font-medium transition-colors"
             >
                 Update
             </button>
