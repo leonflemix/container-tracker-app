@@ -3,6 +3,8 @@
 
 import React, { useMemo } from 'react';
 import { CONTAINER_STATUSES } from '../constants';
+import DashboardSection from './DashboardSection';
+import { safeToDate } from '../utils/dates';
 
 // A simple component for displaying a key metric
 const StatCard = ({ title, value, icon }) => (
@@ -41,7 +43,22 @@ const StatusChart = ({ data }) => {
 };
 
 
-export default function Dashboard({ containers, onContainerSelect }) {
+export default function Dashboard({ containers = [], onOpen = () => {} }) {
+    const active = containers.filter(c => !c.archivedAt);
+
+    const actionsNeeded = active.filter(c => String(c.status).trim() === 'Loading Complete');
+    const readyList = active.filter(c => String(c.status).trim() === 'ALL GOOD, BOOK FOR DELIVERY');
+    const assignedList = active.filter(c => String(c.status || '').startsWith('Assigned to Driver'));
+
+    const renderRow = (c) => (
+        <div className="flex justify-between items-center gap-4 py-2 px-3 hover:bg-gray-700 rounded cursor-pointer" onClick={() => onOpen(c)}>
+            <div className="font-semibold">{c.id}</div>
+            <div className="text-sm text-gray-300">{c.booking || '—'}</div>
+            <div className="text-sm text-gray-400">{c.truck || c.deliveryDriver || '—'}</div>
+            <div className="text-xs text-gray-500">{safeToDate(c.lastUpdate)?.toLocaleString() || ''}</div>
+        </div>
+    );
+
     const stats = useMemo(() => {
         const totalContainers = containers.length;
         
@@ -66,7 +83,9 @@ export default function Dashboard({ containers, onContainerSelect }) {
     }, [containers]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-4">
+            <h1 className="text-2xl font-bold">Dashboard</h1>
+
             {/* Top Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard title="Total Containers in Yard" value={stats.totalContainers} icon="🏗️" />
@@ -87,7 +106,7 @@ export default function Dashboard({ containers, onContainerSelect }) {
                             stats.attentionNeeded.map(container => (
                                 <div 
                                     key={container.id} 
-                                    onClick={() => onContainerSelect(container)}
+                                    onClick={() => onOpen(container)}
                                     className="bg-gray-700 p-3 rounded-md flex justify-between items-center cursor-pointer hover:bg-gray-600 transition-colors"
                                 >
                                     <div>
@@ -96,7 +115,7 @@ export default function Dashboard({ containers, onContainerSelect }) {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs text-gray-400">Updated:</p>
-                                        <p className="text-xs text-gray-400">{new Date(container.lastUpdate).toLocaleString()}</p>
+                                        <p className="text-xs text-gray-400">{safeToDate(container.lastUpdate)?.toLocaleString() || ''}</p>
                                     </div>
                                 </div>
                             ))
@@ -105,6 +124,20 @@ export default function Dashboard({ containers, onContainerSelect }) {
                         )}
                      </div>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+                <DashboardSection title="Actions Needed" subtitle="Containers after 'loaded' and before 'all good'" count={actionsNeeded.length}>
+                    {actionsNeeded.length === 0 ? <div className="p-3 text-gray-400">No items</div> : actionsNeeded.map(renderRow)}
+                </DashboardSection>
+
+                <DashboardSection title="Ready list" subtitle="Containers ready to be assigned" count={readyList.length}>
+                    {readyList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : readyList.map(renderRow)}
+                </DashboardSection>
+
+                <DashboardSection title="Assigned list" subtitle="Containers assigned to a driver" count={assignedList.length}>
+                    {assignedList.length === 0 ? <div className="p-3 text-gray-400">No items</div> : assignedList.map(renderRow)}
+                </DashboardSection>
             </div>
         </div>
     );
