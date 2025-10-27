@@ -8,6 +8,7 @@ import {
     query,
     where,
     getDocs,
+    getDoc, // <-- THIS IS THE FIX
     writeBatch
 } from 'firebase/firestore';
 import { calculateDaysBetween } from '../utils/dates';
@@ -143,13 +144,12 @@ export async function deleteContainerAndEvents({ containersPath, eventsPath, con
     return { deleted: true };
 }
 
-export async function moveContainerToLocation({ containersPath, eventsPath, containerId, selectedLocation }) {
-    // This is a simple status change, but we should read the container first
-    // to store its previous state for undo.
+export async function moveContainerToLocation({ containersPath, eventsPath, containerId, selectedLocation, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    const containerSnap = await getDoc(containerRef);
-    if (!containerSnap.exists()) throw new Error("Container not found");
-    const containerData = containerSnap.data();
+    
+    // Use provided container data if available, otherwise fetch it
+    const containerData = providedContainerData || (await getDoc(containerRef)).data();
+    if (!containerData) throw new Error("Container not found");
 
     const batch = writeBatch(db);
     batch.set(containerRef, { status: selectedLocation, lastUpdate: Timestamp.now() }, { merge: true });
@@ -168,12 +168,13 @@ export async function moveContainerToLocation({ containersPath, eventsPath, cont
     return { moved: true };
 }
 
-export async function markContainerAsLoaded({ containersPath, eventsPath, containerId, oldStatus }) {
+export async function markContainerAsLoaded({ containersPath, eventsPath, containerId, oldStatus, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    const containerSnap = await getDoc(containerRef);
-    if (!containerSnap.exists()) throw new Error("Container not found");
-    const containerData = containerSnap.data();
 
+    // Use provided container data if available, otherwise fetch it
+    const containerData = providedContainerData || (await getDoc(containerRef)).data();
+    if (!containerData) throw new Error("Container not found");
+    
     const newStatus = 'Loading Complete';
     const batch = writeBatch(db);
     batch.set(containerRef, { status: newStatus, lastUpdate: Timestamp.now() }, { merge: true });
@@ -192,11 +193,12 @@ export async function markContainerAsLoaded({ containersPath, eventsPath, contai
     return { loaded: true };
 }
 
-export async function assignDriverToContainer({ containersPath, eventsPath, containerId, selectedDriver }) {
+export async function assignDriverToContainer({ containersPath, eventsPath, containerId, selectedDriver, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    const containerSnap = await getDoc(containerRef);
-    if (!containerSnap.exists()) throw new Error("Container not found");
-    const containerData = containerSnap.data();
+    
+    // Use provided container data if available, otherwise fetch it
+    const containerData = providedContainerData || (await getDoc(containerRef)).data();
+    if (!containerData) throw new Error("Container not found");
 
     const newStatus = `Assigned to Driver - ${selectedDriver}`;
     const batch = writeBatch(db);
@@ -217,23 +219,19 @@ export async function assignDriverToContainer({ containersPath, eventsPath, cont
 }
 
 // --- REWRITTEN: Robust Undo ---
-export async function undoLastUpdate({ containersPath, eventsPath, container, lastEvent }) {
-    if (!container || !lastEvent) throw new Error('container and lastEvent required for undo.');
-    
-    // 1. Get the state to restore from the event
-    const stateToRestore = lastEvent.details?.previousData;
-    if (!stateToRestore) {
-        throw new Error('Cannot undo: This event does not contain the required undo data.');
+export async function undoLastUpdate({ containersPath, eventsPath, containerId, lastEventId, dataToRestore }) {
+    if (!containerId || !lastEventId || !dataToRestore) {
+        throw new Error('Missing required arguments for undo.');
     }
-
-    const containerRef = doc(db, containersPath, container.id);
+    
+    const containerRef = doc(db, containersPath, containerId);
     
     // 2. Prepare the data to write
-    const dataToWrite = { ...stateToRestore };
+    const dataToWrite = { ...dataToRestore };
 
-    // 3. Convert any JS Dates (from old container object) back to Timestamps
-    if (dataToWrite.createdAt && !(dataToWrite.createdAt instanceof Timestamp)) {
-        dataToWrite.createdAt = Timestamp.fromDate(new Date(dataToWrite.createdAt));
+    // 3. Convert any plain date objects (from JSON-like previousData) back to Timestamps
+    if (dataToWrite.createdAt && !(dataToWrite.createdAt instanceof Timestamp) && typeof dataToWrite.createdAt.seconds === 'number') {
+        dataToWrite.createdAt = Timestamp.fromMillis(dataToWrite.createdAt.seconds * 1000);
     }
     // Set lastUpdate to now, not the restored time
     dataToWrite.lastUpdate = Timestamp.now(); 
@@ -241,7 +239,7 @@ export async function undoLastUpdate({ containersPath, eventsPath, container, la
     // 4. Atomically set the restored data and delete the "undo" event
     const batch = writeBatch(db);
     batch.set(containerRef, dataToWrite); // Overwrite with the restored state
-    batch.delete(doc(db, eventsPath, lastEvent.id)); // Delete the event we just undid
+    batch.delete(doc(db, eventsPath, lastEventId)); // Delete the event we just undid
     
     await batch.commit();
     return { undone: true };
@@ -255,11 +253,11 @@ export async function pierAcceptAndArchive({ containersPath, eventsPath, archive
     const daysInYard = calculateDaysBetween(container.createdAt, now);
     const archivedData = { ...container, status: 'Pier Accepted', archivedAt: now, daysInYard };
     
-    if (archivedData.createdAt && !(archivedData.createdAt instanceof Timestamp)) {
-        archivedData.createdAt = Timestamp.fromDate(new Date(archivedData.createdAt));
+    if (archivedData.createdAt && !(archivedData.createdAt instanceof Timestamp) && typeof archivedData.createdAt.seconds === 'number') {
+        archivedData.createdAt = Timestamp.fromMillis(archivedData.createdAt.seconds * 1000);
     }
-    if (archivedData.lastUpdate && !(archivedData.lastUpdate instanceof Timestamp)) {
-        archivedData.lastUpdate = Timestamp.fromDate(new Date(archivedData.lastUpdate));
+    if (archivedData.lastUpdate && !(archivedData.lastUpdate instanceof Timestamp) && typeof archivedData.lastUpdate.seconds === 'number') {
+        archivedData.lastUpdate = Timestamp.fromMillis(archivedData.lastUpdate.seconds * 1000);
     }
 
     const batch = writeBatch(db);
@@ -279,11 +277,12 @@ export async function pierAcceptAndArchive({ containersPath, eventsPath, archive
     return { archived: true };
 }
 
-export async function returnToTilter({ containersPath, eventsPath, containerId }) {
+export async function returnToTilter({ containersPath, eventsPath, containerId, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId);
-    const containerSnap = await getDoc(containerRef);
-    if (!containerSnap.exists()) throw new Error("Container not found");
-    const containerData = containerSnap.data();
+    
+    // Use provided container data if available, otherwise fetch it
+    const containerData = providedContainerData || (await getDoc(containerRef)).data();
+    if (!containerData) throw new Error("Container not found");
 
     const newStatus = 'New';
     const batch = writeBatch(db);
@@ -302,11 +301,12 @@ export async function returnToTilter({ containersPath, eventsPath, containerId }
     return { returned: true };
 }
 
-export async function markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId }) {
+export async function markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId);
-    const containerSnap = await getDoc(containerRef);
-    if (!containerSnap.exists()) throw new Error("Container not found");
-    const containerData = containerSnap.data();
+    
+    // Use provided container data if available, otherwise fetch it
+    const containerData = providedContainerData || (await getDoc(containerRef)).data();
+    if (!containerData) throw new Error("Container not found");
 
     const newStatus = 'Denied - Awaiting Update';
     const batch = writeBatch(db);
@@ -333,8 +333,8 @@ export async function reviveContainer({ containersPath, eventsPath, archivePath,
     delete revivedData.archivedAt;
     delete revivedData.daysInYard;
     
-    if (revivedData.createdAt && !(revivedData.createdAt instanceof Timestamp)) {
-        revivedData.createdAt = Timestamp.fromDate(new Date(revivedData.createdAt));
+    if (revivedData.createdAt && !(revivedData.createdAt instanceof Timestamp) && typeof revivedData.createdAt.seconds === 'number') {
+        revivedData.createdAt = Timestamp.fromMillis(revivedData.createdAt.seconds * 1000);
     }
 
     const batch = writeBatch(db);
@@ -354,11 +354,12 @@ export async function reviveContainer({ containersPath, eventsPath, archivePath,
     return { revived: true };
 }
 
-export async function markContainerAsRepaired({ containersPath, eventsPath, containerId, oldStatus }) {
+export async function markContainerAsRepaired({ containersPath, eventsPath, containerId, oldStatus, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    const containerSnap = await getDoc(containerRef);
-    if (!containerSnap.exists()) throw new Error("Container not found");
-    const containerData = containerSnap.data();
+    
+    // Use provided container data if available, otherwise fetch it
+    const containerData = providedContainerData || (await getDoc(containerRef)).data();
+    if (!containerData) throw new Error("Container not found");
 
     const newStatus = 'Repaired';
     const batch = writeBatch(db);
@@ -380,3 +381,4 @@ export async function markContainerAsRepaired({ containersPath, eventsPath, cont
     await batch.commit();
     return { repaired: true };
 }
+
