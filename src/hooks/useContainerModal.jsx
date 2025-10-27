@@ -1,4 +1,5 @@
 // File: src/hooks/useContainerModal.jsx
+// Location: src/hooks
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Timestamp } from '../firebase';
@@ -22,29 +23,39 @@ import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
 
 export default function useContainerModal(props) {
     const {
-        container,
-        events = [],
+        // These are the ONLY props we take now
         onClose,
         isArchived,
         preselectedBooking
-    } = props; // These are the ONLY props we take now
+    } = props;
 
     // --- GET ALL GLOBAL DATA FROM CONTEXT ---
     const {
+        // Data
         containers,
         archivedContainers,
-        openBookings,
-        collectionsData,
+        bookings,
+        collections: collectionsData, // alias
         paths,
-        addToast,
+
+        // Derived Data
         filledBookingCounts,
-        bookings, // Get all bookings for type lookup
+        openBookings,
+
+        // Modal State & Data
+        selectedContainer,
+        events,
+
+        // Actions
+        addToast,
     } = useAppContext();
 
-    // Re-alias for minimal changes to hook logic
+    // --- RE-ALIAS DATA ---
+    // This allows us to use the context data with the hook's existing variable names
+    const container = selectedContainer;
+    const collections = collectionsData; // Use the alias
     const allContainers = containers;
     const allArchivedContainers = archivedContainers;
-    const collections = collectionsData;
     const { containersPath, eventsPath, archivePath, bookingsPath, archivedBookingsPath } = paths;
 
 
@@ -83,41 +94,43 @@ export default function useContainerModal(props) {
     const uploadFileInputRef = useRef(null);
     const scanFileInputRef = useRef(null);
 
+    // This effect is crucial for resetting the form when the container (from context) changes
+    // This happens because the component is remounted via the `key` prop in App.js
     useEffect(() => {
-        if (!isNew && container) {
-            if (!formData.id || formData.id !== container.id) {
-                setFormData({
-                    id: container.id || '',
-                    status: container.status || 'New',
-                    truck: container.truck || '',
-                    deliveryDriver: container.deliveryDriver || '',
-                    grossWeight: container.grossWeight || 0,
-                    chassis: container.chassis || '',
-                    tareWeight: container.tareWeight || 0,
-                    seal: container.seal || '',
-                    booking: container.booking || '',
-                    bookedFor: container.bookedFor || '',
-                    hasHolesBeforeSquish: container.hasHolesBeforeSquish || false,
-                    hasHolesAfterSquish: container.hasHolesAfterSquish || false,
-                    createdAt: container.createdAt,
-                    lastUpdate: container.lastUpdate
-                });
-            }
-        } else if (isNew) {
+        if (isNew) {
+            // Handle pre-selection from Booking Modal
             if (preselectedBooking && formData.booking !== preselectedBooking) {
                 setFormData(prev => ({ ...prev, booking: preselectedBooking }));
             }
-            if (formData.status !== 'New') {
-                setFormData(prev => ({ ...prev, status: 'New' }));
-            }
+        } else if (container && (!formData.id || formData.id !== container.id)) {
+            // This syncs the form if the container prop is somehow delayed
+            setFormData({
+                id: container.id || '',
+                status: container.status || 'New',
+                truck: container.truck || '',
+                deliveryDriver: container.deliveryDriver || '',
+                grossWeight: container.grossWeight || 0,
+                chassis: container.chassis || '',
+                tareWeight: container.tareWeight || 0,
+                seal: container.seal || '',
+                booking: container.booking || '',
+                bookedFor: container.bookedFor || '',
+                hasHolesBeforeSquish: container.hasHolesBeforeSquish || false,
+                hasHolesAfterSquish: container.hasHolesAfterSquish || false,
+                createdAt: container.createdAt,
+                lastUpdate: container.lastUpdate
+            });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [container, isNew, preselectedBooking]);
 
     const isAtLocation = useMemo(() => {
-        if (!container?.status || !collections.locations) return false;
+        // --- FIX: Add checks for collections and collections.locations ---
+        if (!container?.status || !collections || !Array.isArray(collections.locations)) {
+             return false;
+        }
         return collections.locations.some(loc => loc.location === container.status);
-    }, [container, collections.locations]);
+    }, [container, collections]); // Keep dependencies
 
     const isInWorkshop = useMemo(() => {
         return container?.status === 'IN WORKSHOP';
@@ -130,7 +143,9 @@ export default function useContainerModal(props) {
         if (name === 'booking') {
             const selectedBooking = openBookings.find(b => b.id === value);
             // Check all containers/bookings for existing type info
-            const originalBooking = [...openBookings, ...bookings, ...allArchivedContainers].find(b => b.id === value);
+            const allBookings = [...bookings, ...openBookings, ...allArchivedContainers];
+            const originalBooking = allBookings.find(b => b.id === value);
+
             if (selectedBooking) newFormData.bookedFor = selectedBooking.type || 'N/A';
             else if (originalBooking) newFormData.bookedFor = originalBooking.type || 'N/A';
             else newFormData.bookedFor = 'N/A';
@@ -224,7 +239,8 @@ export default function useContainerModal(props) {
         if (!selectedLocation) { addToast("Please select a location.", 'error'); return; }
         setIsSaving(true);
         try {
-            await moveContainerToLocation({ containersPath, eventsPath, containerId: container.id, selectedLocation });
+            // Pass the current container data to avoid a separate read
+            await moveContainerToLocation({ containersPath, eventsPath, containerId: container.id, selectedLocation, containerData: container });
             addToast(`Container moved to ${selectedLocation}.`, 'success');
             onClose();
         } catch (error) {
@@ -237,7 +253,8 @@ export default function useContainerModal(props) {
         if (!container) return;
         setIsSaving(true);
         try {
-            await markContainerAsLoaded({ containersPath, eventsPath, containerId: container.id, oldStatus: container.status });
+            // Pass current data to avoid a read
+            await markContainerAsLoaded({ containersPath, eventsPath, containerId: container.id, oldStatus: container.status, containerData: container });
             addToast('Container marked as loaded.', 'success');
             onClose();
         } catch (error) {
@@ -252,7 +269,8 @@ export default function useContainerModal(props) {
         if (!selectedDriver) { addToast("Please select a driver to assign.", 'error'); return; }
         setIsSaving(true);
         try {
-            await assignDriverToContainer({ containersPath, eventsPath, containerId: container.id, selectedDriver });
+            // Pass current data to avoid a read
+            await assignDriverToContainer({ containersPath, eventsPath, containerId: container.id, selectedDriver, containerData: container });
             addToast(`Container assigned to ${selectedDriver}.`, 'success');
             onClose();
         } catch (error) {
@@ -261,24 +279,37 @@ export default function useContainerModal(props) {
         } finally { setIsSaving(false); }
     };
 
+    // --- USE OUR NEW ROBUST UNDO LOGIC ---
     const handleUndo = async () => {
-        if (!container || events.length < 1) {
-            addToast("Cannot undo. No previous state found.", 'error'); return;
+        if (!container || !events || events.length < 1) {
+            addToast("Cannot undo. No event history found.", 'error'); return;
         }
-        const lastEvent = events[0];
-        if (lastEvent.details.action.startsWith('Container created') || !lastEvent.details.changes) {
-            addToast("Cannot undo the creation of a container. Please delete it instead.", 'error');
+
+        const lastEvent = events[0]; // Most recent event
+
+        // Check if the last event has our 'previousData' snapshot
+        if (!lastEvent.details.previousData) {
+            addToast("Cannot undo this action. No previous state was saved.", 'error');
             return;
         }
+
         setIsSaving(true);
         try {
-            await undoLastUpdate({ containersPath, eventsPath, container, lastEvent });
+            await undoLastUpdate({
+                containersPath,
+                eventsPath,
+                containerId: container.id,
+                lastEventId: lastEvent.id,
+                dataToRestore: lastEvent.details.previousData
+            });
             addToast("Last update has been successfully undone.", 'success');
             onClose();
         } catch (error) {
             console.error("Error undoing last update:", error);
             addToast(`Failed to undo last update: ${error.message}`, 'error');
-        } finally { setIsSaving(false); }
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handlePierResponse = async (isAccepted) => {
@@ -304,7 +335,8 @@ export default function useContainerModal(props) {
         if (!container) return;
         setIsSaving(true);
         try {
-            await returnToTilter({ containersPath, eventsPath, containerId: container.id });
+            // Pass current data to avoid a read
+            await returnToTilter({ containersPath, eventsPath, containerId: container.id, containerData: container });
             addToast('Container status reset to New.', 'success');
             onClose();
         } catch (error) {
@@ -319,7 +351,8 @@ export default function useContainerModal(props) {
         if (!container) return;
         setIsSaving(true);
         try {
-            await markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId: container.id });
+            // Pass current data to avoid a read
+            await markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId: container.id, containerData: container });
             addToast('Container marked as "Denied - Awaiting Update".', 'success');
             onClose();
         } catch (error) {
@@ -349,11 +382,13 @@ export default function useContainerModal(props) {
         if (!container) return;
         setIsSaving(true);
         try {
-            await markContainerAsRepaired({ 
-                containersPath, 
-                eventsPath, 
-                containerId: container.id, 
-                oldStatus: container.status 
+            // Pass current data to avoid a read
+            await markContainerAsRepaired({
+                containersPath,
+                eventsPath,
+                containerId: container.id,
+                oldStatus: container.status,
+                containerData: container
             });
             addToast('Container marked as repaired.', 'success');
             onClose();
@@ -368,7 +403,8 @@ export default function useContainerModal(props) {
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) return openBookings.find(b => b.id === formData.booking)?.type || null;
         if (!isNew && formData.booking) {
-            const currentBooking = [...openBookings, ...bookings, ...allContainers, ...allArchivedContainers].find(b => b.id === formData.booking);
+            const allBookings = [...bookings, ...openBookings, ...allContainers, ...allArchivedContainers];
+            const currentBooking = allBookings.find(b => b.id === formData.booking);
             return currentBooking?.type || container.bookedFor || 'N/A';
         }
         return container?.bookedFor || null;
@@ -417,6 +453,7 @@ export default function useContainerModal(props) {
         availableStatuses,
 
         // data (pass-through)
+        // These are now from context, but we pass them to the View
         container,
         events,
         openBookings,
