@@ -1,9 +1,8 @@
 // File: src/App.js
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { collection, query, onSnapshot, where } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { db } from './firebase';
 import { CONTAINER_STATUSES } from './constants';
 import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon, CameraIcon, PencilIcon, PlusCircleIcon, UploadIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
@@ -12,24 +11,26 @@ import ReportsPage from './components/ReportsPage';
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
-import InputField from './components/InputField';
-import { ToastProvider, useToasts } from './hooks/useToasts';
+import { ToastProvider } from './hooks/useToasts';
 import Dashboard from './components/Dashboard';
+import { AppProvider, useAppContext } from './context/AppContext'; // IMPORT CONTEXT
 
 // Main App Component Content
 function AppContent() {
-    const [user, setUser] = useState(null);
-    const [containers, setContainers] = useState([]);
-    const [archivedContainers, setArchivedContainers] = useState([]);
-    const [bookings, setBookings] = useState([]);
-    const [archivedBookings, setArchivedBookings] = useState([]);
-    const [collectionsData, setCollectionsData] = useState({
-        drivers: [],
-        locations: [],
-        chassis: [],
-        containerTypes: [],
-    });
-    const [loading, setLoading] = useState(true);
+    // --- CONTEXT DATA ---
+    // All global data now comes from our context
+    const {
+        loading,
+        containers,
+        archivedContainers,
+        collectionsData,
+        paths,
+        addToast,
+        isInitialContainersLoad // Get ref from context
+    } = useAppContext();
+
+    // --- LOCAL UI STATE ---
+    // Kept all state related to UI, selection, and forms
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
@@ -52,9 +53,8 @@ function AppContent() {
     const [showFilters, setShowFilters] = useState(false);
     const [recentlyUpdated, setRecentlyUpdated] = useState([]);
 
-    const { addToast } = useToasts();
     const eventsInitialized = useRef(false);
-    const isInitialContainersLoad = useRef(true);
+    // const isInitialContainersLoad = useRef(true); // THIS IS NOW IN CONTEXT
 
     // --- Save preferences to localStorage ---
     useEffect(() => {
@@ -80,145 +80,53 @@ function AppContent() {
         }
     }, []);
 
-    // Adapt paths based on environment. This makes the app portable.
-    const isCanvasEnv = typeof window !== 'undefined' && typeof window.__app_id !== 'undefined';
-    const appId = isCanvasEnv ? window.__app_id : 'container-tracker-app';
+    // --- REMOVED ALL DATA FETCHING useEffects (Auth, Collections, Containers, Bookings) ---
+    // They now live in AppContext.js
 
-    const containersPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/containers` : 'containers', [appId, isCanvasEnv]);
-    const archivePath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/archive` : 'archive', [appId, isCanvasEnv]);
-    const eventsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/events` : 'events', [appId, isCanvasEnv]);
-    const bookingsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/bookings` : 'bookings', [appId, isCanvasEnv]);
-    const archivedBookingsPath = useMemo(() => isCanvasEnv ? `/artifacts/${appId}/public/data/archivedBookings` : 'archivedBookings', [appId, isCanvasEnv]);
-    const collectionsPaths = useMemo(() => ({
-        drivers: isCanvasEnv ? `/artifacts/${appId}/public/data/drivers` : 'drivers',
-        locations: isCanvasEnv ? `/artifacts/${appId}/public/data/locations` : 'locations',
-        chassis: isCanvasEnv ? `/artifacts/${appId}/public/data/chassis` : 'chassis',
-        containerTypes: isCanvasEnv ? `/artifacts/${appId}/public/data/containerTypes` : 'containerTypes',
-    }), [appId, isCanvasEnv]);
-
-
-    // --- Firebase Auth & Data Fetching ---
+    // --- Highlight logic for container updates ---
+    // This logic needs to stay here to interact with `recentlyUpdated` local state.
     useEffect(() => {
-        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                setUser(currentUser);
-            } else {
-                try {
-                    const initialAuthToken = (typeof window !== 'undefined' && typeof window.__initial_auth_token !== 'undefined') ? window.__initial_auth_token : null;
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
+        if (!loading && !isInitialContainersLoad.current) {
+            // Find changes since the last render
+            const containerMap = new Map(containers.map(c => [c.id, c.lastUpdate]));
+            const prevContainerMap = new Map(JSON.parse(sessionStorage.getItem('prevContainers') || '[]'));
+            
+            let updatedIds = [];
+            
+            containerMap.forEach((lastUpdate, id) => {
+                const prevLastUpdate = prevContainerMap.get(id);
+                if (prevLastUpdate) {
+                     // Compare string representations to avoid date object issues
+                    if (new Date(lastUpdate).toISOString() !== new Date(prevLastUpdate).toISOString()) {
+                        updatedIds.push(id);
                     }
-                } catch (error) {
-                    console.error("Authentication failed:", error);
+                } else if (!prevLastUpdate && !isInitialContainersLoad.current) {
+                    // It's a new container, but not the initial load
+                    // This logic might need refinement depending on desired "new" behavior
                 }
+            });
+
+            if (updatedIds.length > 0) {
+                setRecentlyUpdated(prev => [...prev, ...updatedIds]);
+                updatedIds.forEach(containerId => {
+                    setTimeout(() => {
+                        setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
+                    }, 3000);
+                });
             }
-        });
-        return () => unsubscribeAuth();
-    }, []);
-
-    useEffect(() => {
-        if (user) {
-            const unsubscribes = Object.entries(collectionsPaths).map(([key, path]) =>
-                onSnapshot(query(collection(db, path)), (snapshot) => {
-                    const data = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-                    setCollectionsData(prev => ({ ...prev, [key]: data }));
-                })
-            );
-            return () => unsubscribes.forEach(unsub => unsub());
         }
-    }, [user, collectionsPaths]);
+        
+        // Store current containers for next comparison
+        sessionStorage.setItem('prevContainers', JSON.stringify(Array.from(containers.map(c => [c.id, c.lastUpdate]))));
 
-    // Container listener with highlight logic
-    useEffect(() => {
-        if (user) {
-            const q = query(collection(db, containersPath));
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                const containersData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    lastUpdate: doc.data().lastUpdate?.toDate(),
-                    createdAt: doc.data().createdAt?.toDate()
-                }));
-                setContainers(containersData);
+    }, [containers, loading, isInitialContainersLoad]);
 
-                if (!isInitialContainersLoad.current) {
-                    snapshot.docChanges().forEach((change) => {
-                        if (change.type === "modified") {
-                            const containerId = change.doc.id;
-                            setRecentlyUpdated(prev => [...prev, containerId]);
-                            setTimeout(() => {
-                                setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
-                            }, 3000);
-                        }
-                    });
-                }
-
-                if (isInitialContainersLoad.current) {
-                    setLoading(false);
-                    isInitialContainersLoad.current = false;
-                }
-
-            }, (error) => {
-                console.error("Error fetching containers:", error);
-                setLoading(false);
-            });
-            return () => unsubscribe();
-        }
-    }, [user, containersPath]);
-    
-    useEffect(() => {
-        if (user) {
-            const q = query(collection(db, archivePath));
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const archiveData = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    archivedAt: doc.data().archivedAt?.toDate(),
-                    createdAt: doc.data().createdAt?.toDate()
-                }));
-                setArchivedContainers(archiveData);
-            }, (error) => {
-                console.error("Error fetching archived containers:", error);
-            });
-            return () => unsubscribe();
-        }
-    }, [user, archivePath]);
-
-    useEffect(() => {
-        if (user) {
-            const q = query(collection(db, bookingsPath));
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const bookingsData = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                setBookings(bookingsData);
-            }, (error) => {
-                console.error("Error fetching bookings:", error);
-            });
-            return () => unsubscribe();
-        }
-    }, [user, bookingsPath]);
-
-     useEffect(() => {
-        if (user) {
-            const q = query(collection(db, archivedBookingsPath));
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const bookingsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setArchivedBookings(bookingsData);
-            }, (error) => {
-                console.error("Error fetching archived bookings:", error);
-            });
-            return () => unsubscribe();
-        }
-    }, [user, archivedBookingsPath]);
 
     // Fetch ALL events to show real-time toasts
     useEffect(() => {
-        if (user) {
-            const q = query(collection(db, eventsPath));
+        // We need paths and addToast from context
+        if (paths && addToast) {
+            const q = query(collection(db, paths.eventsPath));
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 if (!eventsInitialized.current) {
                     eventsInitialized.current = true;
@@ -233,7 +141,7 @@ function AppContent() {
             });
             return () => unsubscribe();
         }
-    }, [user, eventsPath, addToast]);
+    }, [paths, addToast]); // Depend on context values
     
     const selectedContainer = useMemo(() => {
         if (!selectedContainerId) return null;
@@ -243,8 +151,9 @@ function AppContent() {
 
     // Fetch events for selected container
     useEffect(() => {
-        if (selectedContainer?.id && user) {
-            const q = query(collection(db, eventsPath), where("containerId", "==", selectedContainer.id));
+        // We need paths from context
+        if (selectedContainer?.id && paths) {
+            const q = query(collection(db, paths.eventsPath), where("containerId", "==", selectedContainer.id));
             const unsubscribe = onSnapshot(q, (querySnapshot) => {
                 const eventsData = querySnapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data(), timestamp: doc.data().timestamp?.toDate() }))
@@ -257,21 +166,10 @@ function AppContent() {
         } else {
             setEvents([]);
         }
-    }, [selectedContainer, user, eventsPath]);
+    }, [selectedContainer, paths]); // Depend on context value
 
-    // --- Memoized Calculations for Performance ---
-    const filledBookingCounts = useMemo(() => {
-        const allContainers = [...containers, ...archivedContainers];
-        return bookings.reduce((acc, booking) => {
-            acc[booking.id] = allContainers.filter(c => c.booking === booking.id).length;
-            return acc;
-        }, {});
-    }, [bookings, containers, archivedContainers]);
-
-    const openBookings = useMemo(() => {
-        return bookings.filter(booking => (filledBookingCounts[booking.id] || 0) < booking.quantity);
-    }, [bookings, filledBookingCounts]);
-
+    // --- REMOVED DERIVED STATE (filledBookingCounts, openBookings) ---
+    // They now live in AppContext.js
 
     // --- Event Handlers ---
     const handleOpenModal = (container = null) => {
@@ -352,10 +250,12 @@ function AppContent() {
 
     const renderMainContent = () => {
         if (pageView === 'dashboard') {
-            return <Dashboard containers={containers} onContainerSelect={handleContainerSelectFromDashboard} />;
+            // Dashboard now gets containers from context
+            return <Dashboard onContainerSelect={handleContainerSelectFromDashboard} />;
         }
         if (pageView === 'reports') {
-            return <ReportsPage archivePath={archivePath} collections={collectionsData} />;
+            // ReportsPage now gets data from context
+            return <ReportsPage />;
         }
         
         return (
@@ -430,7 +330,7 @@ function AppContent() {
                                 container={container} 
                                 onSelect={handleOpenModal} 
                                 isArchived={pageView === 'archive'}
-                                containerTypes={collectionsData.containerTypes}
+                                containerTypes={collectionsData.containerTypes} // Pass this from context
                                 recentlyUpdated={recentlyUpdated}
                             />
                         ))}
@@ -438,7 +338,7 @@ function AppContent() {
                 ) : (
                     <GridContainerView 
                         containers={processedContainers}
-                        collections={collectionsData}
+                        collections={collectionsData} // Pass this from context
                         onEdit={handleOpenModal}
                         isArchived={pageView === 'archive'}
                         recentlyUpdated={recentlyUpdated}
@@ -540,38 +440,19 @@ function AppContent() {
                     container={selectedContainer}
                     events={events}
                     onClose={handleCloseModal}
-                    openBookings={openBookings}
-                    collections={collectionsData}
-                    containersPath={containersPath}
-                    eventsPath={eventsPath}
-                    archivePath={archivePath}
                     isArchived={pageView === 'archive'}
-                    addToast={addToast}
-                    bookingsPath={bookingsPath}
-                    archivedBookingsPath={archivedBookingsPath}
-                    filledBookingCounts={filledBookingCounts}
-                    allContainers={containers}
-                    allArchivedContainers={archivedContainers}
                     preselectedBooking={preselectedBooking}
                 />
             )}
             {isBookingModalOpen && (
                 <BookingModal
                     onClose={() => setIsBookingModalOpen(false)}
-                    openBookings={openBookings}
-                    filledBookingCounts={filledBookingCounts}
-                    bookingsPath={bookingsPath}
-                    containerTypes={collectionsData.containerTypes}
-                    addToast={addToast}
                     onSelectBookingForContainerAdd={handleSelectBookingForContainerAdd}
                 />
             )}
             {isCollectionsModalOpen && (
                 <CollectionsModal
                     onClose={() => setIsCollectionsModalOpen(false)}
-                    paths={collectionsPaths}
-                    collectionsData={collectionsData}
-                    addToast={addToast}
                 />
             )}
         </div>
@@ -582,8 +463,9 @@ function AppContent() {
 export default function App() {
     return (
         <ToastProvider>
-            <AppContent />
+            <AppProvider> { /* NEW: Wrap AppContent with AppProvider */ }
+                <AppContent />
+            </AppProvider>
         </ToastProvider>
     );
 }
-

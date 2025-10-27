@@ -1,3 +1,5 @@
+// File: src/hooks/useContainerModal.jsx
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Timestamp } from '../firebase';
 import useImageProcessing from './useImageProcessing';
@@ -16,26 +18,35 @@ import {
     markContainerAsRepaired
 } from '../services/containerService';
 import { CONTAINER_STATUSES } from '../constants';
+import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
 
 export default function useContainerModal(props) {
     const {
         container,
         events = [],
         onClose,
-        openBookings = [],
-        collections = {},
-        containersPath,
-        eventsPath,
-        archivePath,
         isArchived,
-        addToast,
-        bookingsPath,
-        archivedBookingsPath,
-        filledBookingCounts = {},
-        allContainers = [],
-        allArchivedContainers = [],
         preselectedBooking
-    } = props;
+    } = props; // These are the ONLY props we take now
+
+    // --- GET ALL GLOBAL DATA FROM CONTEXT ---
+    const {
+        containers,
+        archivedContainers,
+        openBookings,
+        collectionsData,
+        paths,
+        addToast,
+        filledBookingCounts,
+        bookings, // Get all bookings for type lookup
+    } = useAppContext();
+
+    // Re-alias for minimal changes to hook logic
+    const allContainers = containers;
+    const allArchivedContainers = archivedContainers;
+    const collections = collectionsData;
+    const { containersPath, eventsPath, archivePath, bookingsPath, archivedBookingsPath } = paths;
+
 
     const isNew = !container;
     const [formData, setFormData] = useState(() => {
@@ -118,7 +129,8 @@ export default function useContainerModal(props) {
 
         if (name === 'booking') {
             const selectedBooking = openBookings.find(b => b.id === value);
-            const originalBooking = [...openBookings, ...allArchivedContainers].find(b => b.id === value);
+            // Check all containers/bookings for existing type info
+            const originalBooking = [...openBookings, ...bookings, ...allArchivedContainers].find(b => b.id === value);
             if (selectedBooking) newFormData.bookedFor = selectedBooking.type || 'N/A';
             else if (originalBooking) newFormData.bookedFor = originalBooking.type || 'N/A';
             else newFormData.bookedFor = 'N/A';
@@ -356,11 +368,11 @@ export default function useContainerModal(props) {
     const selectedBookingType = useMemo(() => {
         if (isNew && formData.booking) return openBookings.find(b => b.id === formData.booking)?.type || null;
         if (!isNew && formData.booking) {
-            const currentBooking = [...openBookings, ...allContainers, ...allArchivedContainers].find(b => b.id === formData.booking);
+            const currentBooking = [...openBookings, ...bookings, ...allContainers, ...allArchivedContainers].find(b => b.id === formData.booking);
             return currentBooking?.type || container.bookedFor || 'N/A';
         }
         return container?.bookedFor || null;
-    }, [formData.booking, openBookings, isNew, container, allContainers, allArchivedContainers]);
+    }, [formData.booking, openBookings, isNew, container, allContainers, allArchivedContainers, bookings]);
 
     const availableStatuses = useMemo(() => {
         const statuses = CONTAINER_STATUSES.filter(s => s.isDispatchOption);
@@ -427,3 +439,4 @@ export default function useContainerModal(props) {
         handleMarkAsRepaired
     };
 }
+

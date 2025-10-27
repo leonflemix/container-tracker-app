@@ -3,8 +3,15 @@ import React, { useState } from 'react';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import InputField from './InputField';
+import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
 
-export default function ReportsPage({ archivePath, collections }) {
+export default function ReportsPage() {
+    // --- GET DATA FROM CONTEXT ---
+    const { paths, collectionsData } = useAppContext();
+    const archivePath = paths.archivePath;
+    const collections = collectionsData;
+
+    // All local state remains the same
     const [reportType, setReportType] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');

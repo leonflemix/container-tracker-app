@@ -4,8 +4,22 @@ import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon } from '../icons';
+import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
 
-export default function BookingModal({ onClose, openBookings, filledBookingCounts, bookingsPath, containerTypes, addToast, onSelectBookingForContainerAdd }) {
+export default function BookingModal({ onClose, onSelectBookingForContainerAdd }) {
+    // --- GET DATA FROM CONTEXT ---
+    const {
+        openBookings,
+        filledBookingCounts,
+        paths,
+        collectionsData,
+        addToast
+    } = useAppContext();
+
+    const bookingsPath = paths.bookingsPath;
+    const containerTypes = collectionsData.containerTypes;
+
+    // All local state remains the same
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null); // null for new, object for edit
     const [formData, setFormData] = useState({

@@ -5,6 +5,7 @@ import React, { useMemo } from 'react';
 import { CONTAINER_STATUSES } from '../constants';
 import DashboardSection from './DashboardSection';
 import { safeToDate } from '../utils/dates';
+import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
 
 // A simple component for displaying a key metric
 const StatCard = ({ title, value, icon }) => (
@@ -85,7 +86,10 @@ const ContainerRow = ({ container, onOpen }) => {
     );
 };
 
-export default function Dashboard({ containers = [], onOpen = () => {} }) {
+export default function Dashboard({ onOpen = () => {} }) {
+    // --- GET DATA FROM CONTEXT ---
+    const { containers } = useAppContext();
+
     const active = containers.filter(c => !c.archivedAt);
 
     const actionsNeeded = active.filter(c => String(c.status).trim() === 'Loading Complete');

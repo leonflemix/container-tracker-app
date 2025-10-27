@@ -3,12 +3,17 @@ import React, { useState } from 'react';
 import { db } from '../firebase';
 import { collection, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import CollectionManager from './CollectionManager';
+import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
 
-export default function CollectionsModal({ onClose, paths, collectionsData, addToast }) {
+export default function CollectionsModal({ onClose }) {
+    // --- GET DATA FROM CONTEXT ---
+    const { paths, collectionsData, addToast } = useAppContext();
+    const collectionPaths = paths.collectionsPaths; // Get nested paths object
+
     const [activeTab, setActiveTab] = useState('drivers');
 
     const handleSave = async (collectionName, data, isNew) => {
-        const path = paths[collectionName];
+        const path = collectionPaths[collectionName]; // Use correct path
         const docRef = isNew ? doc(collection(db, path)) : doc(db, path, data.docId);
         const dataToSave = { ...data };
         delete dataToSave.docId;
@@ -23,7 +28,7 @@ export default function CollectionsModal({ onClose, paths, collectionsData, addT
     
     const handleDelete = async (collectionName, docId) => {
         try {
-            await deleteDoc(doc(db, paths[collectionName], docId));
+            await deleteDoc(doc(db, collectionPaths[collectionName], docId)); // Use correct path
             addToast(`${collectionName.slice(0, -1)} item deleted successfully!`, 'success');
         } catch (error) { 
             console.error(`Error deleting from ${collectionName}:`, error);
