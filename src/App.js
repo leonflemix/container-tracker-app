@@ -1,10 +1,9 @@
 // File: src/App.js
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, query, onSnapshot, where } from 'firebase/firestore';
-import { db } from './firebase';
+import React, { useState, useMemo } from 'react';
+// We no longer need data-fetching imports here
 import { CONTAINER_STATUSES } from './constants';
-import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon, UndoIcon, CalendarDaysIcon, CameraIcon, PencilIcon, PlusCircleIcon, UploadIcon } from './icons';
+import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
@@ -13,64 +12,62 @@ import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
 import { ToastProvider } from './hooks/useToasts';
 import Dashboard from './components/Dashboard';
-import { AppProvider, useAppContext } from './context/AppContext'; // IMPORT CONTEXT
+import { AppProvider, useAppContext } from './context/AppContext'; // Import context
 
 // Main App Component Content
 function AppContent() {
-    // --- CONTEXT DATA ---
-    // All global data now comes from our context
+    // --- All data state is now in AppContext ---
     const {
-        loading,
         containers,
         archivedContainers,
-        collectionsData,
-        paths,
-        addToast,
-        isInitialContainersLoad // Get ref from context
+        collections,
+        loading,
+        recentlyUpdated,
+        
+        // --- MODAL STATE AND HANDLERS FROM CONTEXT ---
+        isModalOpen,
+        openModal,
+        closeModal,
+        selectedContainer,
+        selectedContainerId
+        // ---
+        
     } = useAppContext();
-
+    
     // --- LOCAL UI STATE ---
-    // Kept all state related to UI, selection, and forms
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
-    const [selectedContainerId, setSelectedContainerId] = useState(null); // Changed to store ID
     const [preselectedBooking, setPreselectedBooking] = useState(null);
-    const [events, setEvents] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', or 'reports'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
-    // State for sorting and filtering, now initialized from localStorage
+    // State for sorting and filtering
     const [sortConfig, setSortConfig] = useState(() => {
         const savedSort = localStorage.getItem('containerTrackerSort');
-        return savedSort ? JSON.parse(savedSort) : { key: 'createdAt', direction: 'ascending' }; // Default to FIFO
+        return savedSort ? JSON.parse(savedSort) : { key: 'createdAt', direction: 'ascending' };
     });
     const [filters, setFilters] = useState(() => {
         const savedFilters = localStorage.getItem('containerTrackerFilters');
         return savedFilters ? JSON.parse(savedFilters) : { status: '', bookedFor: '' };
     });
     const [showFilters, setShowFilters] = useState(false);
-    const [recentlyUpdated, setRecentlyUpdated] = useState([]);
-
-    const eventsInitialized = useRef(false);
-    // const isInitialContainersLoad = useRef(true); // THIS IS NOW IN CONTEXT
 
     // --- Save preferences to localStorage ---
-    useEffect(() => {
+    React.useEffect(() => {
         localStorage.setItem('containerTrackerView', view);
     }, [view]);
 
-    useEffect(() => {
+    React.useEffect(() => {
         localStorage.setItem('containerTrackerSort', JSON.stringify(sortConfig));
     }, [sortConfig]);
 
-    useEffect(() => {
+    React.useEffect(() => {
         localStorage.setItem('containerTrackerFilters', JSON.stringify(filters));
     }, [filters]);
 
     // --- Dynamically load external scripts ---
-    useEffect(() => {
+    React.useEffect(() => {
         const scriptId = 'tailwind-cdn';
         if (!document.getElementById(scriptId)) {
             const script = document.createElement('script');
@@ -80,107 +77,24 @@ function AppContent() {
         }
     }, []);
 
-    // --- REMOVED ALL DATA FETCHING useEffects (Auth, Collections, Containers, Bookings) ---
-    // They now live in AppContext.js
-
-    // --- Highlight logic for container updates ---
-    // This logic needs to stay here to interact with `recentlyUpdated` local state.
-    useEffect(() => {
-        if (!loading && !isInitialContainersLoad.current) {
-            // Find changes since the last render
-            const containerMap = new Map(containers.map(c => [c.id, c.lastUpdate]));
-            const prevContainerMap = new Map(JSON.parse(sessionStorage.getItem('prevContainers') || '[]'));
-            
-            let updatedIds = [];
-            
-            containerMap.forEach((lastUpdate, id) => {
-                const prevLastUpdate = prevContainerMap.get(id);
-                if (prevLastUpdate) {
-                     // Compare string representations to avoid date object issues
-                    if (new Date(lastUpdate).toISOString() !== new Date(prevLastUpdate).toISOString()) {
-                        updatedIds.push(id);
-                    }
-                } else if (!prevLastUpdate && !isInitialContainersLoad.current) {
-                    // It's a new container, but not the initial load
-                    // This logic might need refinement depending on desired "new" behavior
-                }
-            });
-
-            if (updatedIds.length > 0) {
-                setRecentlyUpdated(prev => [...prev, ...updatedIds]);
-                updatedIds.forEach(containerId => {
-                    setTimeout(() => {
-                        setRecentlyUpdated(prev => prev.filter(id => id !== containerId));
-                    }, 3000);
-                });
-            }
-        }
-        
-        // Store current containers for next comparison
-        sessionStorage.setItem('prevContainers', JSON.stringify(Array.from(containers.map(c => [c.id, c.lastUpdate]))));
-
-    }, [containers, loading, isInitialContainersLoad]);
-
-
-    // Fetch ALL events to show real-time toasts
-    useEffect(() => {
-        // We need paths and addToast from context
-        if (paths && addToast) {
-            const q = query(collection(db, paths.eventsPath));
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                if (!eventsInitialized.current) {
-                    eventsInitialized.current = true;
-                    return;
-                }
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added") {
-                        const newEvent = change.doc.data();
-                        addToast(`${newEvent.details.action} for container ${newEvent.containerId}`, 'info');
-                    }
-                });
-            });
-            return () => unsubscribe();
-        }
-    }, [paths, addToast]); // Depend on context values
-    
-    const selectedContainer = useMemo(() => {
-        if (!selectedContainerId) return null;
-        // Look in both live and archived containers to find the most current version
-        return containers.find(c => c.id === selectedContainerId) || archivedContainers.find(c => c.id === selectedContainerId);
-    }, [selectedContainerId, containers, archivedContainers]);
-
-    // Fetch events for selected container
-    useEffect(() => {
-        // We need paths from context
-        if (selectedContainer?.id && paths) {
-            const q = query(collection(db, paths.eventsPath), where("containerId", "==", selectedContainer.id));
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const eventsData = querySnapshot.docs
-                    .map(doc => ({ id: doc.id, ...doc.data(), timestamp: doc.data().timestamp?.toDate() }))
-                    .sort((a, b) => b.timestamp - a.timestamp);
-                setEvents(eventsData);
-            }, (error) => {
-                console.error("Error fetching events:", error);
-            });
-            return () => unsubscribe();
-        } else {
-            setEvents([]);
-        }
-    }, [selectedContainer, paths]); // Depend on context value
-
-    // --- REMOVED DERIVED STATE (filledBookingCounts, openBookings) ---
-    // They now live in AppContext.js
-
     // --- Event Handlers ---
+    
+    // MODAL HANDLERS ARE NOW SIMPLIFIED
     const handleOpenModal = (container = null) => {
-        setSelectedContainerId(container ? container.id : null); // Store only the ID
-        setIsModalOpen(true);
+        setPreselectedBooking(null); // Clear preselection
+        openModal(container ? container.id : null); // Just pass the ID to the context
     };
 
     const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setSelectedContainerId(null);
+        closeModal();
         setPreselectedBooking(null); // Clear preselection on close
+    };
+    
+    // This handler is for the Booking Modal
+    const handleSelectBookingForContainerAdd = (bookingId) => {
+        setPreselectedBooking(bookingId);
+        setIsBookingModalOpen(false);
+        handleOpenModal(null); // Open container modal for a new container
     };
 
     const handleFilterChange = (e) => {
@@ -199,12 +113,6 @@ function AppContent() {
     const handleContainerSelectFromDashboard = (container) => {
         setPageView('live');
         handleOpenModal(container);
-    };
-
-    const handleSelectBookingForContainerAdd = (bookingId) => {
-        setPreselectedBooking(bookingId);
-        setIsBookingModalOpen(false);
-        handleOpenModal(null); // Open container modal for a new container
     };
 
     // --- Main Filtering and Sorting Logic ---
@@ -250,11 +158,11 @@ function AppContent() {
 
     const renderMainContent = () => {
         if (pageView === 'dashboard') {
-            // Dashboard now gets containers from context
-            return <Dashboard onContainerSelect={handleContainerSelectFromDashboard} />;
+            // Pass the handler as 'onOpen'
+            return <Dashboard onOpen={handleContainerSelectFromDashboard} />;
         }
         if (pageView === 'reports') {
-            // ReportsPage now gets data from context
+            // No props needed!
             return <ReportsPage />;
         }
         
@@ -295,7 +203,8 @@ function AppContent() {
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Filter by Type</label>
                                 <select name="bookedFor" value={filters.bookedFor} onChange={handleFilterChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none">
                                     <option value="">All Types</option>
-                                    {collectionsData.containerTypes.map(t => <option key={t.docId} value={t.name}>{t.name}</option>)}
+                                    {/* Data now from context */}
+                                    {collections.containerTypes.map(t => <option key={t.docId} value={t.name}>{t.name}</option>)}
                                 </select>
                             </div>
                             {/* Sort Buttons */}
@@ -328,9 +237,9 @@ function AppContent() {
                             <ContainerCard 
                                 key={container.id} 
                                 container={container} 
-                                onSelect={handleOpenModal} 
+                                onSelect={handleOpenModal} // Use the simplified handler
                                 isArchived={pageView === 'archive'}
-                                containerTypes={collectionsData.containerTypes} // Pass this from context
+                                containerTypes={collections.containerTypes}
                                 recentlyUpdated={recentlyUpdated}
                             />
                         ))}
@@ -338,8 +247,8 @@ function AppContent() {
                 ) : (
                     <GridContainerView 
                         containers={processedContainers}
-                        collections={collectionsData} // Pass this from context
-                        onEdit={handleOpenModal}
+                        collections={collections}
+                        onEdit={handleOpenModal} // Use the simplified handler
                         isArchived={pageView === 'archive'}
                         recentlyUpdated={recentlyUpdated}
                     />
@@ -357,6 +266,13 @@ function AppContent() {
             default: return 'Container Tracker';
         }
     };
+
+    // This logic prevents the modal from showing an "edit" screen
+    // with "new" data (or vice-versa) during the re-render
+    const canRenderModal = isModalOpen && (
+        (selectedContainerId === null) || // We are creating a new container
+        (selectedContainerId && selectedContainer) // We are editing and the container data has been loaded
+    );
 
     return (
         <div className="bg-gray-900 text-gray-100 min-h-screen font-sans">
@@ -423,7 +339,7 @@ function AppContent() {
                             Add Booking
                         </button>
                         <button
-                            onClick={() => handleOpenModal(null)}
+                            onClick={() => handleOpenModal(null)} // Simplified
                             className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
                             <PlusIcon />
@@ -434,25 +350,32 @@ function AppContent() {
                 {renderMainContent()}
             </div>
 
-            {isModalOpen && selectedContainer !== undefined && (
+            {/* --- MODAL RENDERING --- */}
+            {/* The modal is only rendered when it's open AND the data is ready */}
+            {/* The key prop is CRITICAL to force remount when the ID changes */}
+            {canRenderModal && (
                 <ContainerModal
-                    key={selectedContainerId}
-                    container={selectedContainer}
-                    events={events}
+                    key={selectedContainerId} 
                     onClose={handleCloseModal}
+                    // All data is now passed from context,
+                    // but we still pass these props
                     isArchived={pageView === 'archive'}
                     preselectedBooking={preselectedBooking}
                 />
             )}
+            
             {isBookingModalOpen && (
                 <BookingModal
                     onClose={() => setIsBookingModalOpen(false)}
+                    // No props needed, it will get data from context
                     onSelectBookingForContainerAdd={handleSelectBookingForContainerAdd}
                 />
             )}
+            
             {isCollectionsModalOpen && (
                 <CollectionsModal
                     onClose={() => setIsCollectionsModalOpen(false)}
+                    // No props needed, it will get data from context
                 />
             )}
         </div>
@@ -462,10 +385,12 @@ function AppContent() {
 // Wrap AppContent with the provider
 export default function App() {
     return (
+        // The ToastProvider MUST wrap the AppProvider
         <ToastProvider>
-            <AppProvider> { /* NEW: Wrap AppContent with AppProvider */ }
+            <AppProvider>
                 <AppContent />
             </AppProvider>
         </ToastProvider>
     );
 }
+
