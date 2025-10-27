@@ -15,8 +15,22 @@ export default function EditContainerForm({
     onClose,
     isSaving,
     setDeleteConfirmOpen,
-    handleUndo
+    handleUndo,
+    events = [] // <-- RECEIVE EVENTS PROP
 }) {
+
+    // --- NEW: Logic to enable/disable the undo button ---
+    const lastEvent = events[0];
+    const isUndoDisabled = (
+        isSaving ||
+        !lastEvent ||
+        lastEvent.details.action.startsWith('Container created') ||
+        !lastEvent.details.previousData // Check for the new robust undo field
+    );
+    const undoTitle = isUndoDisabled ? 
+        (!lastEvent ? "No history to undo" : "Cannot undo this action (e.g., creation or old event)")
+        : "Undo Last Update";
+
     return (
         <form onSubmit={handleSubmit} className="p-4 lg:w-1/2 space-y-4">
             <InputField label="Container #" name="id" value={formData.id || ''} disabled={true} />
@@ -64,7 +78,15 @@ export default function EditContainerForm({
             <div className="pt-4 flex justify-between items-center gap-3">
                 <div>
                     <button type="button" onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-sm">Delete</button>
-                    <button type="button" onClick={handleUndo} disabled className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo Last Update</button>
+                    <button 
+                        type="button" 
+                        onClick={handleUndo} 
+                        disabled={isUndoDisabled} // <-- USE DYNAMIC DISABLED
+                        title={undoTitle}
+                        className="py-2 px-4 ml-2 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed"
+                    >
+                        Undo Last Update
+                    </button>
                     {!isEditingCoreDetails && (
                         <button type="button" onClick={() => setIsEditingCoreDetails(true)} title="Edit Core Details" className="flex items-center py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm">
                             <PencilIcon /> Edit Core

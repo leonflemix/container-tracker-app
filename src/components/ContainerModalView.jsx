@@ -21,7 +21,7 @@ export default function ContainerModalView(props) {
         isSaving,
         isImageProcessing,
         container,
-        events,
+        events, // This is now needed by EditContainerForm
         openBookings,
         collections,
 
@@ -181,6 +181,7 @@ export default function ContainerModalView(props) {
                     isSaving={isSaving}
                     setDeleteConfirmOpen={() => setDeleteConfirmOpen(true)}
                     handleUndo={handleUndo}
+                    events={events} // <-- PASS EVENTS HERE
                 />
                 <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
                     <h3 className="text-lg font-semibold mb-3">Event History</h3>
