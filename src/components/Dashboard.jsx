@@ -3,9 +3,8 @@
 
 import React, { useMemo } from 'react';
 import { CONTAINER_STATUSES } from '../constants';
-import DashboardSection from './DashboardSection';
 import { safeToDate } from '../utils/dates';
-import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
+import { useAppContext } from '../context/AppContext';
 
 // A simple component for displaying a key metric
 const StatCard = ({ title, value, icon }) => (
@@ -43,72 +42,8 @@ const StatusChart = ({ data }) => {
     );
 };
 
-// Reusable container row component
-const ContainerRow = ({ container, onOpen }) => {
-    const lastUpdate = safeToDate(container.lastUpdate);
-    const timeSince = lastUpdate ? new Intl.RelativeTimeFormat('en').format(
-        Math.round((lastUpdate - new Date()) / (1000 * 60 * 60 * 24)),
-        'days'
-    ) : 'never';
-
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (onOpen && typeof onOpen === 'function') {
-            onOpen(container);
-        }
-    };
-
-    return (
-        <div className="flex justify-between items-center gap-4 py-3 px-4 hover:bg-gray-700 rounded group">
-            <div className="flex-1">
-                <div className="font-semibold text-blue-400">{container.id}</div>
-                <div className="text-sm text-gray-400">Booking: {container.booking || '—'}</div>
-            </div>
-            <div className="flex-1">
-                <div className="text-sm text-gray-300">{container.status}</div>
-                <div className="text-xs text-gray-500">{container.truck || container.deliveryDriver || '—'}</div>
-            </div>
-            <div className="text-right">
-                <div className="text-xs text-gray-400">Last Update:</div>
-                <div className="text-xs text-gray-500" title={lastUpdate?.toLocaleString()}>
-                    {timeSince}
-                </div>
-            </div>
-            <button 
-                type="button"
-                onClick={handleUpdate}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white font-medium transition-colors"
-            >
-                Update
-            </button>
-        </div>
-    );
-};
-
 export default function Dashboard({ onOpen = () => {} }) {
-    // --- GET DATA FROM CONTEXT ---
     const { containers } = useAppContext();
-
-    const active = containers.filter(c => !c.archivedAt);
-
-    const actionsNeeded = active.filter(c => String(c.status).trim() === 'Loading Complete');
-    const readyList = active.filter(c => String(c.status).trim() === 'ALL GOOD, BOOK FOR DELIVERY');
-    const assignedList = active.filter(c => String(c.status || '').startsWith('Assigned to Driver'));
-    const needsRepair = active.filter(c => c.hasHolesBeforeSquish || c.hasHolesAfterSquish);
-    const inWorkshop = active.filter(c => String(c.status).trim() === 'IN WORKSHOP');
-
-    const renderRow = (c) => (
-        <div className="flex justify-between items-center gap-4 py-2 px-3 hover:bg-gray-700 rounded cursor-pointer" onClick={() => onOpen(c)}>
-            <div className="font-semibold">{c.id}</div>
-            <div className="text-sm text-gray-300">{c.booking || '—'}</div>
-            <div className="text-sm text-gray-400">{c.truck || c.deliveryDriver || '—'}</div>
-           
-            <div className="text-sm text-gray-300">{c.booking || '—'}</div>
-            <div className="text-sm text-gray-400">{c.truck || c.deliveryDriver || '—'}</div>
-            <div className="text-xs text-gray-500">{safeToDate(c.lastUpdate)?.toLocaleString() || ''}</div>
-        </div>
-    );
 
     const stats = useMemo(() => {
         const totalContainers = containers.length;
@@ -132,13 +67,6 @@ export default function Dashboard({ onOpen = () => {} }) {
 
         return { totalContainers, chartData, attentionNeeded };
     }, [containers]);
-
-    // Sort by most recent update first
-    const sortByLastUpdate = (a, b) => {
-        const dateA = safeToDate(a.lastUpdate)?.getTime() || 0;
-        const dateB = safeToDate(b.lastUpdate)?.getTime() || 0;
-        return dateB - dateA;
-    };
 
     return (
         <div className="space-y-6 p-4">
@@ -182,58 +110,6 @@ export default function Dashboard({ onOpen = () => {} }) {
                         )}
                      </div>
                 </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-                <DashboardSection title="Actions Needed" subtitle="Containers after 'loaded' and before 'all good'" count={actionsNeeded.length}>
-                    {actionsNeeded.length === 0 ? <div className="p-3 text-gray-400">No items</div> : actionsNeeded.sort(sortByLastUpdate).map(container => (
-                        <ContainerRow 
-                            key={container.id} 
-                            container={container} 
-                            onOpen={onOpen} 
-                        />
-                    ))}
-                </DashboardSection>
-
-                <DashboardSection title="Needs Repair" subtitle="Containers with holes before or after squish" count={needsRepair.length} className="bg-red-900/20">
-                    {needsRepair.length === 0 ? <div className="p-3 text-gray-400">No containers need repair</div> : needsRepair.sort(sortByLastUpdate).map(container => (
-                        <ContainerRow 
-                            key={container.id} 
-                            container={container} 
-                            onOpen={onOpen} 
-                        />
-                    ))}
-                </DashboardSection>
-
-                <DashboardSection title="In Workshop" subtitle="Containers currently being repaired" count={inWorkshop.length} className="bg-yellow-900/20">
-                    {inWorkshop.length === 0 ? <div className="p-3 text-gray-400">No containers in workshop</div> : inWorkshop.sort(sortByLastUpdate).map(container => (
-                        <ContainerRow 
-                            key={container.id} 
-                            container={container} 
-                            onOpen={onOpen} 
-                        />
-                    ))}
-                </DashboardSection>
-
-                <DashboardSection title="Ready for Assignment" subtitle="Containers ready to be assigned to drivers" count={readyList.length}>
-                    {readyList.length === 0 ? <div className="p-3 text-gray-400">No containers ready</div> : readyList.sort(sortByLastUpdate).map(container => (
-                        <ContainerRow 
-                            key={container.id} 
-                            container={container} 
-                            onOpen={onOpen} 
-                        />
-                    ))}
-                </DashboardSection>
-
-                <DashboardSection title="Currently Assigned" subtitle="Containers assigned to drivers" count={assignedList.length}>
-                    {assignedList.length === 0 ? <div className="p-3 text-gray-400">No assigned containers</div> : assignedList.sort(sortByLastUpdate).map(container => (
-                        <ContainerRow 
-                            key={container.id} 
-                            container={container} 
-                            onOpen={onOpen} 
-                        />
-                    ))}
-                </DashboardSection>
             </div>
         </div>
     );
