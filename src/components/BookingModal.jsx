@@ -4,22 +4,25 @@ import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon } from '../icons';
-import { useAppContext } from '../context/AppContext'; // IMPORT CONTEXT
+import { useAppContext } from '../context/AppContext'; // Import context
 
 export default function BookingModal({ onClose, onSelectBookingForContainerAdd }) {
-    // --- GET DATA FROM CONTEXT ---
+    // Get data from context instead of props
     const {
         openBookings,
         filledBookingCounts,
         paths,
-        collectionsData,
+        collections, // Get the whole collections object first
         addToast
     } = useAppContext();
 
-    const bookingsPath = paths.bookingsPath;
-    const containerTypes = collectionsData.containerTypes;
+    // --- FIX: Add defensive check for collections and containerTypes ---
+    const containerTypes = collections?.containerTypes || [];
+    // ---
 
-    // All local state remains the same
+    const { bookingsPath } = paths;
+
+
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null); // null for new, object for edit
     const [formData, setFormData] = useState({
@@ -66,13 +69,13 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
         setIsSaving(true);
         const bookingId = (editingBooking ? editingBooking.id : formData.id).toUpperCase();
         const bookingRef = doc(db, bookingsPath, bookingId);
-        
+
         const dataToSave = {
             id: bookingId,
             quantity: formData.quantity,
             type: formData.type,
         };
-        
+
         // Only add createdAt for new bookings
         if (!editingBooking) {
             dataToSave.createdAt = Timestamp.now();
@@ -98,7 +101,7 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
                     <h2 className="text-xl font-bold">{isFormOpen ? (editingBooking ? 'Edit Booking' : 'Add New Booking') : 'Open Bookings'}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
-                
+
                 <div className="p-4 overflow-y-auto">
                     {isFormOpen ? (
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -115,12 +118,14 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
                                     className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">-- Select a Type --</option>
+                                    {/* --- FIX: Use the checked containerTypes variable --- */}
                                     {containerTypes.map(type => (
                                         <option key={type.docId} value={type.name}>{type.name}</option>
                                     ))}
+                                    {/* --- */}
                                 </select>
                             </div>
-                            
+
                             <div className="pt-4 flex justify-end gap-3">
                                 <button type="button" onClick={closeForm} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Back to List</button>
                                 <button type="submit" disabled={isSaving} className="py-2 px-4 bg-green-600 hover:bg-green-700 rounded-lg disabled:bg-green-800 disabled:cursor-not-allowed">
