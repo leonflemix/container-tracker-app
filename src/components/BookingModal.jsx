@@ -4,8 +4,24 @@ import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon } from '../icons';
+import { useAppContext } from '../context/AppContext'; // Import context
 
-export default function BookingModal({ onClose, openBookings, filledBookingCounts, bookingsPath, containerTypes, addToast, onSelectBookingForContainerAdd }) {
+export default function BookingModal({ onClose, onSelectBookingForContainerAdd }) {
+    // --- Get data from context ---
+    const {
+        openBookings,
+        filledBookingCounts,
+        paths,
+        collections: collectionsData, // Get collections data
+        addToast
+    } = useAppContext();
+    const { bookingsPath } = paths;
+
+    // --- Add defensive check for collections and containerTypes ---
+    const collections = collectionsData || {};
+    const containerTypes = collections.containerTypes || [];
+    // ---
+
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null); // null for new, object for edit
     const [formData, setFormData] = useState({
@@ -14,10 +30,6 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
         type: '',
     });
     const [isSaving, setIsSaving] = useState(false);
-
-    // --- FIX: Add defensive check for containerTypes ---
-    const safeContainerTypes = containerTypes || [];
-    // ---
 
     const openForm = (booking = null) => {
         setEditingBooking(booking);
@@ -56,13 +68,13 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
         setIsSaving(true);
         const bookingId = (editingBooking ? editingBooking.id : formData.id).toUpperCase();
         const bookingRef = doc(db, bookingsPath, bookingId);
-        
+
         const dataToSave = {
             id: bookingId,
             quantity: formData.quantity,
             type: formData.type,
         };
-        
+
         // Only add createdAt for new bookings
         if (!editingBooking) {
             dataToSave.createdAt = Timestamp.now();
@@ -81,20 +93,29 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
         }
     };
 
+    // Click handler for closing modal when clicking backdrop
+    const handleBackdropClick = (e) => {
+        if (e.target === e.currentTarget) {
+            onClose();
+        }
+    };
+
+    // Click handler to stop propagation when clicking inside modal content
+    const handleContentClick = (e) => {
+        e.stopPropagation();
+    };
+
+
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
-            onClick={onClose} // --- ADDED: Click backdrop to close ---
-        >
-            <div 
-                className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()} // --- ADDED: Stop click propagation ---
-            >
+        // Add backdrop click handler
+        <div onClick={handleBackdropClick} className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
+             {/* Add content click handler */}
+            <div onClick={handleContentClick} className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
                 <header className="flex justify-between items-center p-4 border-b border-gray-700">
                     <h2 className="text-xl font-bold">{isFormOpen ? (editingBooking ? 'Edit Booking' : 'Add New Booking') : 'Open Bookings'}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
-                
+
                 <div className="p-4 overflow-y-auto">
                     {isFormOpen ? (
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,13 +132,13 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
                                     className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">-- Select a Type --</option>
-                                    {/* --- FIX: Use safeContainerTypes --- */}
-                                    {safeContainerTypes.map(type => (
+                                     {/* Use the safe containerTypes array */}
+                                    {containerTypes.map(type => (
                                         <option key={type.docId} value={type.name}>{type.name}</option>
                                     ))}
                                 </select>
                             </div>
-                            
+
                             <div className="pt-4 flex justify-end gap-3">
                                 <button type="button" onClick={closeForm} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Back to List</button>
                                 <button type="submit" disabled={isSaving} className="py-2 px-4 bg-green-600 hover:bg-green-700 rounded-lg disabled:bg-green-800 disabled:cursor-not-allowed">
@@ -128,7 +149,8 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
                     ) : (
                         <div>
                             <div className="space-y-3 mb-4">
-                                {openBookings.map(booking => (
+                                {/* Ensure openBookings is an array before mapping */}
+                                {(openBookings || []).map(booking => (
                                     <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
                                         <div>
                                             <p className="font-bold text-white">{booking.id}</p>
@@ -136,7 +158,8 @@ export default function BookingModal({ onClose, openBookings, filledBookingCount
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <div className="text-right">
-                                                <p className="text-lg font-semibold text-white">{filledBookingCounts[booking.id] || 0} / {booking.quantity}</p>
+                                                 {/* Ensure filledBookingCounts exists */}
+                                                <p className="text-lg font-semibold text-white">{(filledBookingCounts || {})[booking.id] || 0} / {booking.quantity}</p>
                                                 <p className="text-xs text-gray-400">Filled</p>
                                             </div>
                                             <button onClick={() => openForm(booking)} className="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-gray-600 rounded-full" title="Edit Booking">
