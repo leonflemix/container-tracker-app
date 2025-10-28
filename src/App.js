@@ -1,6 +1,8 @@
 // File: src/App.js
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+// We no longer need data-fetching imports here
+import { CONTAINER_STATUSES } from './constants';
 import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
@@ -10,57 +12,160 @@ import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
 import { ToastProvider } from './hooks/useToasts';
 import Dashboard from './components/Dashboard';
-import { AppProvider, useAppContext } from './context/AppContext'; // Import AppProvider and hook
-import { CONTAINER_STATUSES } from './constants'; // Re-import for filters
+import { AppProvider, useAppContext } from './context/AppContext'; // Import context
 
 // Main App Component Content
 function AppContent() {
-    // --- All state is now managed by AppContext ---
+    // --- All data state is now in AppContext ---
     const {
-        loading,
         containers,
         archivedContainers,
-        collections: collectionsData, // alias
-        pageView,
-        setPageView,
-        view,
-        setView,
-        sortConfig,
-        requestSort,
-        filters,
-        handleFilterChange,
-        showFilters,
-        setShowFilters,
-        searchTerm,
-        setSearchTerm,
-        processedContainers,
+        collections,
+        loading,
         recentlyUpdated,
         
-        // Modal State & Handlers
+        // --- MODAL STATE AND HANDLERS FROM CONTEXT ---
         isModalOpen,
-        isBookingModalOpen,
-        setIsBookingModalOpen,
-        isCollectionsModalOpen,
-        setIsCollectionsModalOpen,
-        handleOpenModal,
-        handleCloseModal,
-        handleSelectBookingForContainerAdd,
-        selectedContainerId, // We need this for the <ContainerModal key />
-        isModalReady, // Use this to control rendering
+        openModal,
+        closeModal,
+        selectedContainer,
+        selectedContainerId
+        // ---
+        
     } = useAppContext();
+    
+    // --- LOCAL UI STATE ---
+    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+    const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
+    const [preselectedBooking, setPreselectedBooking] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', or 'reports'
+    const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
+    
+    // State for sorting and filtering
+    const [sortConfig, setSortConfig] = useState(() => {
+        const savedSort = localStorage.getItem('containerTrackerSort');
+        return savedSort ? JSON.parse(savedSort) : { key: 'createdAt', direction: 'ascending' };
+    });
+    const [filters, setFilters] = useState(() => {
+        const savedFilters = localStorage.getItem('containerTrackerFilters');
+        return savedFilters ? JSON.parse(savedFilters) : { status: '', bookedFor: '' };
+    });
+    const [showFilters, setShowFilters] = useState(false);
 
-    // --- FIX: Add defensive check for collectionsData and containerTypes ---
-    const containerTypes = collectionsData?.containerTypes || [];
-    // ---
+    // --- Save preferences to localStorage ---
+    React.useEffect(() => {
+        localStorage.setItem('containerTrackerView', view);
+    }, [view]);
+
+    React.useEffect(() => {
+        localStorage.setItem('containerTrackerSort', JSON.stringify(sortConfig));
+    }, [sortConfig]);
+
+    React.useEffect(() => {
+        localStorage.setItem('containerTrackerFilters', JSON.stringify(filters));
+    }, [filters]);
+
+    // --- Dynamically load external scripts ---
+    React.useEffect(() => {
+        const scriptId = 'tailwind-cdn';
+        if (!document.getElementById(scriptId)) {
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = 'https://cdn.tailwindcss.com';
+            document.head.appendChild(script);
+        }
+    }, []);
+
+    // --- Event Handlers ---
+    
+    // MODAL HANDLERS ARE NOW SIMPLIFIED
+    const handleOpenModal = (container = null) => {
+        setPreselectedBooking(null); // Clear preselection
+        openModal(container ? container.id : null); // Just pass the ID to the context
+    };
+
+    const handleCloseModal = () => {
+        closeModal();
+        setPreselectedBooking(null); // Clear preselection on close
+    };
+    
+    // This handler is for the Booking Modal
+    const handleSelectBookingForContainerAdd = (bookingId) => {
+        setPreselectedBooking(bookingId);
+        setIsBookingModalOpen(false);
+        handleOpenModal(null); // Open container modal for a new container
+    };
+
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
+    };
+
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const handleContainerSelectFromDashboard = (container) => {
+        setPageView('live');
+        handleOpenModal(container);
+    };
+
+    // --- Main Filtering and Sorting Logic ---
+    const processedContainers = useMemo(() => {
+        let sourceData = pageView === 'live' ? containers : archivedContainers;
+
+        // 1. Filtering
+        let filtered = sourceData.filter(c => {
+            const searchMatch = !searchTerm ||
+                c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.booking?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.truck?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.deliveryDriver?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.bookedFor?.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const statusMatch = !filters.status || c.status === filters.status;
+            const typeMatch = !filters.bookedFor || c.bookedFor === filters.bookedFor;
+            
+            return searchMatch && statusMatch && typeMatch;
+        });
+
+        // 2. Sorting
+        if (sortConfig.key) {
+            filtered.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                
+                if (aValue == null) return 1;
+                if (bValue == null) return -1;
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+
+        return filtered;
+    }, [containers, archivedContainers, searchTerm, pageView, filters, sortConfig]);
 
     const renderMainContent = () => {
         if (pageView === 'dashboard') {
-            return <Dashboard onContainerSelect={handleOpenModal} />;
+            // Pass the handler as 'onOpen'
+            return <Dashboard onOpen={handleContainerSelectFromDashboard} />;
         }
         if (pageView === 'reports') {
+            // No props needed!
             return <ReportsPage />;
         }
-
+        
         return (
             <>
                 {/* Search, View, and Filter Bar */}
@@ -98,9 +203,8 @@ function AppContent() {
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Filter by Type</label>
                                 <select name="bookedFor" value={filters.bookedFor} onChange={handleFilterChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none">
                                     <option value="">All Types</option>
-                                    {/* --- FIX: Use the checked containerTypes variable --- */}
-                                    {containerTypes.map(t => <option key={t.docId} value={t.name}>{t.name}</option>)}
-                                    {/* --- */}
+                                    {/* Data now from context */}
+                                    {collections.containerTypes.map(t => <option key={t.docId} value={t.name}>{t.name}</option>)}
                                 </select>
                             </div>
                             {/* Sort Buttons */}
@@ -130,21 +234,21 @@ function AppContent() {
                 ) : view === 'card' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {processedContainers.map((container) => (
-                            <ContainerCard
-                                key={container.id}
-                                container={container}
-                                onSelect={handleOpenModal}
+                            <ContainerCard 
+                                key={container.id} 
+                                container={container} 
+                                onSelect={handleOpenModal} // Use the simplified handler
                                 isArchived={pageView === 'archive'}
-                                containerTypes={containerTypes} // Pass the safe variable
+                                containerTypes={collections.containerTypes}
                                 recentlyUpdated={recentlyUpdated}
                             />
                         ))}
                     </div>
                 ) : (
-                    <GridContainerView
+                    <GridContainerView 
                         containers={processedContainers}
-                        collections={collectionsData} // Pass the whole object
-                        onEdit={handleOpenModal}
+                        collections={collections}
+                        onEdit={handleOpenModal} // Use the simplified handler
                         isArchived={pageView === 'archive'}
                         recentlyUpdated={recentlyUpdated}
                     />
@@ -152,7 +256,7 @@ function AppContent() {
             </>
         )
     }
-
+    
     const getPageTitle = () => {
         switch (pageView) {
             case 'dashboard': return 'Dashboard';
@@ -162,6 +266,13 @@ function AppContent() {
             default: return 'Container Tracker';
         }
     };
+
+    // This logic prevents the modal from showing an "edit" screen
+    // with "new" data (or vice-versa) during the re-render
+    const canRenderModal = isModalOpen && (
+        (selectedContainerId === null) || // We are creating a new container
+        (selectedContainerId && selectedContainer) // We are editing and the container data has been loaded
+    );
 
     return (
         <div className="bg-gray-900 text-gray-100 min-h-screen font-sans">
@@ -228,7 +339,7 @@ function AppContent() {
                             Add Booking
                         </button>
                         <button
-                            onClick={() => handleOpenModal(null)}
+                            onClick={() => handleOpenModal(null)} // Simplified
                             className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
                             <PlusIcon />
@@ -239,28 +350,32 @@ function AppContent() {
                 {renderMainContent()}
             </div>
 
-            {/* Modal rendering is now controlled by isModalReady from context */}
-            {isModalReady && (
+            {/* --- MODAL RENDERING --- */}
+            {/* The modal is only rendered when it's open AND the data is ready */}
+            {/* The key prop is CRITICAL to force remount when the ID changes */}
+            {canRenderModal && (
                 <ContainerModal
-                    key={selectedContainerId || 'new'} // Use key to force remount
+                    key={selectedContainerId} 
                     onClose={handleCloseModal}
+                    // All data is now passed from context,
+                    // but we still pass these props
                     isArchived={pageView === 'archive'}
-                    // All other data is now provided by context
+                    preselectedBooking={preselectedBooking}
                 />
             )}
             
             {isBookingModalOpen && (
                 <BookingModal
                     onClose={() => setIsBookingModalOpen(false)}
+                    // No props needed, it will get data from context
                     onSelectBookingForContainerAdd={handleSelectBookingForContainerAdd}
-                    // All other data is now provided by context
                 />
             )}
-
+            
             {isCollectionsModalOpen && (
                 <CollectionsModal
                     onClose={() => setIsCollectionsModalOpen(false)}
-                    // All other data is now provided by context
+                    // No props needed, it will get data from context
                 />
             )}
         </div>
@@ -270,8 +385,9 @@ function AppContent() {
 // Wrap AppContent with the provider
 export default function App() {
     return (
+        // The ToastProvider MUST wrap the AppProvider
         <ToastProvider>
-            <AppProvider> {/* AppProvider is now inside ToastProvider */}
+            <AppProvider>
                 <AppContent />
             </AppProvider>
         </ToastProvider>
