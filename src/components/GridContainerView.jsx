@@ -4,15 +4,6 @@ import React from 'react';
 import { CONTAINER_STATUSES } from '../constants';
 
 export default function GridContainerView({ containers, onEdit, isArchived, collections, recentlyUpdated = [] }) {
-    
-    // --- FIX: Add defensive check for collections and containerTypes ---
-    const containerTypes = collections?.containerTypes || [];
-    // ---
-
-    // --- FIX: Add defensive check for containers prop ---
-    const displayContainers = containers || [];
-    // ---
-
     return (
         <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
             <table className="min-w-full text-sm text-left text-gray-300">
@@ -30,8 +21,7 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                    {/* --- FIX: Use the checked displayContainers variable --- */}
-                    {displayContainers.map(container => {
+                    {containers.map(container => {
                         let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
                         if (container.status && container.status.startsWith('Assigned to Driver')) {
                             statusInfo = { emoji: '👨‍✈️', label: container.status };
@@ -40,9 +30,7 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
                             statusInfo = { emoji: '📍', label: container.status };
                         }
 
-                        // --- FIX: Use the checked containerTypes variable ---
-                        const typeInfo = containerTypes.find(t => t.name === container.bookedFor);
-                        // ---
+                        const typeInfo = collections.containerTypes.find(t => t.name === container.bookedFor);
                         const typeColor = typeInfo?.color || 'inherit';
                         const isHighlighted = recentlyUpdated.includes(container.id);
 
