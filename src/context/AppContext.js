@@ -1,4 +1,4 @@
-// File: src/context/AppContext.js
+// File: src/context/AppContext.js 
 // Location: src/context
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
