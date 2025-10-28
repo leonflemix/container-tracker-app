@@ -21,7 +21,7 @@ export default function ContainerModalView(props) {
         isSaving,
         isImageProcessing,
         container,
-        events, // This is now needed by EditContainerForm
+        events,
         openBookings,
         collections,
 
@@ -181,7 +181,6 @@ export default function ContainerModalView(props) {
                     isSaving={isSaving}
                     setDeleteConfirmOpen={() => setDeleteConfirmOpen(true)}
                     handleUndo={handleUndo}
-                    events={events} // <-- PASS EVENTS HERE
                 />
                 <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
                     <h3 className="text-lg font-semibold mb-3">Event History</h3>
@@ -192,8 +191,14 @@ export default function ContainerModalView(props) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
+            onClick={onClose} // --- ADDED: Click backdrop to close ---
+        >
+            <div 
+                className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()} // --- ADDED: Stop click propagation ---
+            >
                 <header className="flex justify-between items-center p-4 border-b border-gray-700">
                     <h2 className="text-xl font-bold">{isNew ? 'Add New Container' : `Edit: ${container?.id || '...'}`}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
@@ -222,3 +227,4 @@ export default function ContainerModalView(props) {
         </div>
     );
 }
+

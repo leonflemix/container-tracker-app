@@ -4,25 +4,8 @@ import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon } from '../icons';
-import { useAppContext } from '../context/AppContext'; // Import context
 
-export default function BookingModal({ onClose, onSelectBookingForContainerAdd }) {
-    // Get data from context instead of props
-    const {
-        openBookings,
-        filledBookingCounts,
-        paths,
-        collections, // Get the whole collections object first
-        addToast
-    } = useAppContext();
-
-    // --- FIX: Add defensive check for collections and containerTypes ---
-    const containerTypes = collections?.containerTypes || [];
-    // ---
-
-    const { bookingsPath } = paths;
-
-
+export default function BookingModal({ onClose, openBookings, filledBookingCounts, bookingsPath, containerTypes, addToast, onSelectBookingForContainerAdd }) {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null); // null for new, object for edit
     const [formData, setFormData] = useState({
@@ -31,6 +14,10 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
         type: '',
     });
     const [isSaving, setIsSaving] = useState(false);
+
+    // --- FIX: Add defensive check for containerTypes ---
+    const safeContainerTypes = containerTypes || [];
+    // ---
 
     const openForm = (booking = null) => {
         setEditingBooking(booking);
@@ -69,13 +56,13 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
         setIsSaving(true);
         const bookingId = (editingBooking ? editingBooking.id : formData.id).toUpperCase();
         const bookingRef = doc(db, bookingsPath, bookingId);
-
+        
         const dataToSave = {
             id: bookingId,
             quantity: formData.quantity,
             type: formData.type,
         };
-
+        
         // Only add createdAt for new bookings
         if (!editingBooking) {
             dataToSave.createdAt = Timestamp.now();
@@ -95,13 +82,19 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
+            onClick={onClose} // --- ADDED: Click backdrop to close ---
+        >
+            <div 
+                className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()} // --- ADDED: Stop click propagation ---
+            >
                 <header className="flex justify-between items-center p-4 border-b border-gray-700">
                     <h2 className="text-xl font-bold">{isFormOpen ? (editingBooking ? 'Edit Booking' : 'Add New Booking') : 'Open Bookings'}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
-
+                
                 <div className="p-4 overflow-y-auto">
                     {isFormOpen ? (
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -118,14 +111,13 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
                                     className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">-- Select a Type --</option>
-                                    {/* --- FIX: Use the checked containerTypes variable --- */}
-                                    {containerTypes.map(type => (
+                                    {/* --- FIX: Use safeContainerTypes --- */}
+                                    {safeContainerTypes.map(type => (
                                         <option key={type.docId} value={type.name}>{type.name}</option>
                                     ))}
-                                    {/* --- */}
                                 </select>
                             </div>
-
+                            
                             <div className="pt-4 flex justify-end gap-3">
                                 <button type="button" onClick={closeForm} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Back to List</button>
                                 <button type="submit" disabled={isSaving} className="py-2 px-4 bg-green-600 hover:bg-green-700 rounded-lg disabled:bg-green-800 disabled:cursor-not-allowed">
