@@ -9,6 +9,10 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
     const containerTypes = collections?.containerTypes || [];
     // ---
 
+    // --- FIX: Add defensive check for containers prop ---
+    const displayContainers = containers || [];
+    // ---
+
     return (
         <div className="overflow-x-auto bg-gray-800 rounded-lg shadow-lg">
             <table className="min-w-full text-sm text-left text-gray-300">
@@ -26,7 +30,8 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
-                    {containers.map(container => {
+                    {/* --- FIX: Use the checked displayContainers variable --- */}
+                    {displayContainers.map(container => {
                         let statusInfo = CONTAINER_STATUSES.find(s => s.label === container.status);
                         if (container.status && container.status.startsWith('Assigned to Driver')) {
                             statusInfo = { emoji: '👨‍✈️', label: container.status };
@@ -82,3 +87,4 @@ export default function GridContainerView({ containers, onEdit, isArchived, coll
         </div>
     );
 }
+
