@@ -1,4 +1,5 @@
 // File: src/hooks/useContainerActions.js
+// Location: src/hooks
 
 import { useState, useMemo, useRef } from 'react';
 import useImageProcessing from './useImageProcessing';
@@ -37,7 +38,7 @@ export default function useContainerActions({
         containers,
         archivedContainers,
         openBookings,
-        collectionsData,
+        collections, // <-- BUG FIX: Destructure 'collections' directly
         paths,
         addToast,
         filledBookingCounts
@@ -46,7 +47,7 @@ export default function useContainerActions({
     // Re-alias for clarity in service calls
     const allContainers = containers;
     const allArchivedContainers = archivedContainers;
-    const collections = collectionsData;
+    // const collections = collectionsData; // <-- BUG FIX: This alias is no longer needed
     const { containersPath, eventsPath, archivePath, bookingsPath, archivedBookingsPath } = paths;
 
     // --- Local state for modal actions ---
@@ -154,7 +155,8 @@ export default function useContainerActions({
         if (!selectedLocation) { addToast("Please select a location.", 'error'); return; }
         setIsSaving(true);
         try {
-            await moveContainerToLocation({ containersPath, eventsPath, containerId: container.id, selectedLocation });
+            // --- OPTIMIZATION: Pass containerData ---
+            await moveContainerToLocation({ containersPath, eventsPath, containerId: container.id, selectedLocation, containerData: container });
             addToast(`Container moved to ${selectedLocation}.`, 'success');
             onClose();
         } catch (error) {
@@ -167,7 +169,8 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-            await markContainerAsLoaded({ containersPath, eventsPath, containerId: container.id, oldStatus: container.status });
+             // --- OPTIMIZATION: Pass containerData ---
+            await markContainerAsLoaded({ containersPath, eventsPath, containerId: container.id, oldStatus: container.status, containerData: container });
             addToast('Container marked as loaded.', 'success');
             onClose();
         } catch (error) {
@@ -182,7 +185,8 @@ export default function useContainerActions({
         if (!selectedDriver) { addToast("Please select a driver to assign.", 'error'); return; }
         setIsSaving(true);
         try {
-            await assignDriverToContainer({ containersPath, eventsPath, containerId: container.id, selectedDriver });
+             // --- OPTIMIZATION: Pass containerData ---
+            await assignDriverToContainer({ containersPath, eventsPath, containerId: container.id, selectedDriver, containerData: container });
             addToast(`Container assigned to ${selectedDriver}.`, 'success');
             onClose();
         } catch (error) {
@@ -200,7 +204,6 @@ export default function useContainerActions({
             addToast("Cannot undo the creation of a container. Please delete it instead.", 'error');
             return;
         }
-        // --- NEW: Check for the robust previousData field ---
         if (!lastEvent.details.previousData) {
             addToast("Cannot undo: This event is too old and lacks the required undo data.", 'error');
             return;
@@ -208,8 +211,13 @@ export default function useContainerActions({
 
         setIsSaving(true);
         try {
-            // The service function is now much simpler
-            await undoLastUpdate({ containersPath, eventsPath, container, lastEvent });
+            await undoLastUpdate({
+                containersPath,
+                eventsPath,
+                containerId: container.id,
+                lastEventId: lastEvent.id,
+                dataToRestore: lastEvent.details.previousData
+            });
             addToast("Last update has been successfully undone.", 'success');
             onClose();
         } catch (error) {
@@ -241,7 +249,8 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-            await returnToTilter({ containersPath, eventsPath, containerId: container.id });
+             // --- OPTIMIZATION: Pass containerData ---
+            await returnToTilter({ containersPath, eventsPath, containerId: container.id, containerData: container });
             addToast('Container status reset to New.', 'success');
             onClose();
         } catch (error) {
@@ -256,7 +265,8 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-            await markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId: container.id });
+             // --- OPTIMIZATION: Pass containerData ---
+            await markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId: container.id, containerData: container });
             addToast('Container marked as "Denied - Awaiting Update".', 'success');
             onClose();
         } catch (error) {
@@ -286,11 +296,13 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
+             // --- OPTIMIZATION: Pass containerData ---
             await markContainerAsRepaired({ 
                 containersPath, 
                 eventsPath, 
                 containerId: container.id, 
-                oldStatus: container.status 
+                oldStatus: container.status,
+                containerData: container
             });
             addToast('Container marked as repaired.', 'success');
             onClose();
@@ -305,9 +317,12 @@ export default function useContainerActions({
     // --- Derived State for UI ---
 
     const isAtLocation = useMemo(() => {
-        if (!container?.status || !collections.locations) return false;
+        // --- BUG FIX: Add safety check for collections and collections.locations ---
+        if (!container?.status || !collections || !Array.isArray(collections.locations)) {
+            return false;
+        }
         return collections.locations.some(loc => loc.location === container.status);
-    }, [container, collections.locations]);
+    }, [container, collections]); // <-- Use collections directly
 
     const isInWorkshop = useMemo(() => {
         return container?.status === 'IN WORKSHOP';
