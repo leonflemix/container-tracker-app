@@ -12,7 +12,8 @@ export default function ContainerModal(props) {
     const { isArchived, preselectedBooking, onClose } = props;
 
     // Get data directly from context
-    const { selectedContainer, events, openBookings } = useAppContext(); // <-- FIX: Get openBookings
+    // --- FIX: Get collections from context ---
+    const { selectedContainer, events, openBookings, collections } = useAppContext(); 
 
     // Determine if this is a new container
     const isNew = !selectedContainer;
@@ -48,7 +49,8 @@ export default function ContainerModal(props) {
             formData={formData}
             handleChange={handleChange}
             selectedBookingType={selectedBookingType}
-            openBookings={openBookings} // <-- FIX: Pass openBookings down
+            openBookings={openBookings}
+            collections={collections} // <-- FIX: Pass collections down
         />
     );
 }
