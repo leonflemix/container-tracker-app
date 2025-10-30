@@ -1,3 +1,6 @@
+// File: src/components/DashboardSection.jsx
+// Location: src/components
+
 import React from 'react';
 
 // Simple section wrapper that shows title, count and children list.

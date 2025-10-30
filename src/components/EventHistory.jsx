@@ -1,3 +1,6 @@
+// File: src/components/EventHistory.jsx
+// Location: src/components
+
 import React from 'react';
 import { safeToDate } from '../utils/dates';
 

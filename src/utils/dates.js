@@ -1,3 +1,6 @@
+// File: src/utils/dates.js
+// Location: src/utils
+
 export const safeToDate = (timestamp) => {
     // Accept Firebase Timestamp, JS Date, and object with seconds
     if (!timestamp) return null;

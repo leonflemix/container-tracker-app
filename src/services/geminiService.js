@@ -1,3 +1,6 @@
+// File: src/services/geminiService.js
+// Location: src/services
+
 // Minimal wrapper for calling the Gemini generative language API with retries.
 // Returns extracted text (string) or throws.
 export async function extractTextFromImage(base64Data, mimeType, apiKey, maxRetries = 3) {

@@ -1,3 +1,6 @@
+// File: src/services/containerService.js
+// Location: src/services
+
 import { db, Timestamp } from '../firebase';
 import {
     collection,
@@ -381,4 +384,3 @@ export async function markContainerAsRepaired({ containersPath, eventsPath, cont
     await batch.commit();
     return { repaired: true };
 }
-

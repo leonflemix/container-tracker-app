@@ -1,8 +1,8 @@
-import React from 'react';
+// File: src/components/ImageUploadButtons.jsx
+// Location: src/components
 
-// Simple icons fallback if ../icons not available
-const CameraIcon = () => <span aria-hidden>📷</span>;
-const UploadIcon = () => <span aria-hidden>⬆️</span>;
+import React from 'react';
+import { CameraIcon, UploadIcon } from '../icons'; // <-- BUG FIX: Import from central icons file
 
 // Renders hidden file inputs and two buttons to trigger them.
 // Props:

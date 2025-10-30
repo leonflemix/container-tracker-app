@@ -1,4 +1,5 @@
 // File: src/App.js
+// Location: src
 
 import React, { useState, useMemo } from 'react';
 // We no longer need data-fetching imports here
@@ -393,4 +394,3 @@ export default function App() {
         </ToastProvider>
     );
 }
-

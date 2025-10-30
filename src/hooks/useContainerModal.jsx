@@ -1,6 +1,13 @@
 // File: src/hooks/useContainerModal.jsx
 // Location: src/hooks
 
+// NOTE: This file is now obsolete.
+// Its logic has been refactored into:
+// - src/hooks/useContainerForm.js
+// - src/hooks/useContainerActions.js
+// - src/components/ContainerModal.jsx (which now uses the new hooks)
+// You can safely delete this file.
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Timestamp } from '../firebase';
 import useImageProcessing from './useImageProcessing';
@@ -476,4 +483,3 @@ export default function useContainerModal(props) {
         handleMarkAsRepaired
     };
 }
-

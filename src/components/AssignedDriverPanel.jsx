@@ -1,3 +1,6 @@
+// File: src/components/AssignedDriverPanel.jsx
+// Location: src/components
+
 import React from 'react';
 import InputField from './InputField';
 
@@ -16,6 +19,19 @@ export default function AssignedDriverPanel({
     onClose
 }) {
     const driver = collections.drivers.find(d => d.name === container.deliveryDriver);
+
+    // --- BUG FIX: Updated Undo logic to match EditContainerForm ---
+    const lastEvent = events[0];
+    const isUndoDisabled = (
+        isSaving ||
+        !lastEvent ||
+        lastEvent.details.action.startsWith('Container created') ||
+        !lastEvent.details.previousData // Check for the new robust undo field
+    );
+    const undoTitle = isUndoDisabled ?
+        (!lastEvent ? "No history to undo" : "Cannot undo this action (e.g., creation or old event)")
+        : "Undo Last Update";
+    // --- End Bug Fix ---
 
     if (denialStep === 'choose') {
         return (
@@ -45,7 +61,14 @@ export default function AssignedDriverPanel({
             <div className="flex justify-between items-center">
                 <div>
                     <button onClick={() => setDeleteConfirmOpen(true)} className="py-2 px-4 bg-red-800 hover:bg-red-700 rounded-lg text-sm">Delete</button>
-                    <button onClick={handleUndo} disabled={events.length < 2 || isSaving} className="py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed">Undo</button>
+                    <button 
+                        onClick={handleUndo} 
+                        disabled={isUndoDisabled} // Use new logic
+                        title={undoTitle} // Use new title
+                        className="py-2 px-4 ml-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-sm disabled:bg-yellow-800 disabled:cursor-not-allowed"
+                    >
+                        Undo
+                    </button>
                 </div>
                 <div className="flex gap-3">
                     <button onClick={() => handlePierResponse(false)} disabled={isSaving} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg">Denied</button>

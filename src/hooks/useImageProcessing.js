@@ -1,3 +1,6 @@
+// File: src/hooks/useImageProcessing.js
+// Location: src/hooks
+
 import { useState } from 'react';
 import { fileToBase64, parseOcrText } from '../utils/ocr';
 import { extractTextFromImage } from '../services/geminiService';
@@ -10,11 +13,15 @@ export default function useImageProcessing({ addToast }) {
     const processFile = async (file) => {
         if (!file) return null;
 
+        // --- RECOMMENDATION ---
+        // You can remove this check and the `apiKey` parameter from `extractTextFromImage`
+        // if you use the built-in Canvas API key injection.
         const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
         if (!apiKey) {
             addToast("Gemini API key is not configured.", 'error');
             return null;
         }
+        // --- END RECOMMENDATION ---
 
         setIsProcessing(true);
         addToast("Processing image with Gemini...", "info");

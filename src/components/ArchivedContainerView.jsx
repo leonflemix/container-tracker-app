@@ -1,3 +1,6 @@
+// File: src/components/ArchivedContainerView.jsx
+// Location: src/components
+
 import React from 'react';
 import InputField from './InputField';
 import { UndoIcon } from '../icons';

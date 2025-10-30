@@ -1,3 +1,6 @@
+// File: src/components/NewContainerForm.jsx
+// Location: src/components
+
 import React from 'react';
 import ImageUploadButtons from './ImageUploadButtons';
 import InputField from './InputField';

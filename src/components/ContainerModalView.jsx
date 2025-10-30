@@ -1,3 +1,6 @@
+// File: src/components/ContainerModalView.jsx
+// Location: src/components
+
 import React from 'react';
 import InputField from './InputField';
 import EventHistory from './EventHistory';
@@ -181,6 +184,7 @@ export default function ContainerModalView(props) {
                     isSaving={isSaving}
                     setDeleteConfirmOpen={() => setDeleteConfirmOpen(true)}
                     handleUndo={handleUndo}
+                    events={events} // <-- BUG FIX: Pass events prop here
                 />
                 <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
                     <h3 className="text-lg font-semibold mb-3">Event History</h3>
@@ -227,4 +231,3 @@ export default function ContainerModalView(props) {
         </div>
     );
 }
-

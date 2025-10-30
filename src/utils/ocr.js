@@ -1,3 +1,6 @@
+// File: src/utils/ocr.js
+// Location: src/utils
+
 // Helpers for OCR parsing & basic file -> base64 conversion
 export const fileToBase64 = (file) =>
     new Promise((resolve, reject) => {

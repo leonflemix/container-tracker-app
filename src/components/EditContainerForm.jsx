@@ -1,3 +1,6 @@
+// File: src/components/EditContainerForm.jsx
+// Location: src/components
+
 import React from 'react';
 import InputField from './InputField';
 import CheckboxField from './CheckboxField';

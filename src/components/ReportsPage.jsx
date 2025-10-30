@@ -1,4 +1,6 @@
 // File: src/components/ReportsPage.jsx
+// Location: src/components
+
 import React, { useState } from 'react';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -7,7 +9,7 @@ import { useAppContext } from '../context/AppContext'; // Import context
 
 export default function ReportsPage() {
     // Get data from context
-    const { paths, collections: collectionsData } = useAppContext();
+    const { paths, collections: collectionsData, addToast } = useAppContext(); // <-- Get addToast
     const { archivePath } = paths;
 
     // --- FIX: Add defensive check for collectionsData and drivers ---
@@ -24,7 +26,7 @@ export default function ReportsPage() {
 
     const handleGenerateReport = async () => {
         if (!reportType) {
-            alert('Please select a report type.');
+            addToast('Please select a report type.', 'error'); // <-- Use addToast
             return;
         }
 
@@ -36,7 +38,7 @@ export default function ReportsPage() {
             let summary = '';
             const isDateRangeReport = ['shippedByDate', 'byDriver', 'holesBefore', 'holesAfterOnly'].includes(reportType);
             if (isDateRangeReport && (!startDate || !endDate)) {
-                alert('Please select a start and end date.');
+                addToast('Please select a start and end date.', 'error'); // <-- Use addToast
                 setIsLoading(false);
                 return;
             }
@@ -54,7 +56,7 @@ export default function ReportsPage() {
                 summary = (size) => `Found ${size} containers with holes only after squishing in this period.`;
             } else if (reportType === 'byDriver') {
                 if (!selectedDriver) {
-                    alert('Please select a driver.');
+                    addToast('Please select a driver.', 'error'); // <-- Use addToast
                     setIsLoading(false);
                     return;
                 }
@@ -71,6 +73,7 @@ export default function ReportsPage() {
 
         } catch (error) {
             console.error("Error generating report:", error);
+            addToast('Error generating report. You may need to create a composite index in Firestore. Check the console.', 'error');
             setReportData({ summary: 'Error generating report. You may need to create a composite index in Firestore. Check the console for a direct link.', data: [] });
         }
 
@@ -155,4 +158,3 @@ export default function ReportsPage() {
         </div>
     );
 }
-
