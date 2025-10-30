@@ -197,11 +197,11 @@ export default function ContainerModalView(props) {
     return (
         <div 
             className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
-            onClick={onClose} // --- ADDED: Click backdrop to close ---
+            onClick={onClose}
         >
             <div 
                 className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()} // --- ADDED: Stop click propagation ---
+                onClick={(e) => e.stopPropagation()}
             >
                 <header className="flex justify-between items-center p-4 border-b border-gray-700">
                     <h2 className="text-xl font-bold">{isNew ? 'Add New Container' : `Edit: ${container?.id || '...'}`}</h2>
@@ -231,3 +231,4 @@ export default function ContainerModalView(props) {
         </div>
     );
 }
+

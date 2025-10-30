@@ -37,7 +37,7 @@ export default function ContainerModal(props) {
     });
 
     // 3. Pass everything to the View component
-    // We pass ...props to forward `key`
+    // We pass ...props to forward `key` and `onClose`
     return (
         <ContainerModalView
             {...props}
@@ -51,3 +51,4 @@ export default function ContainerModal(props) {
         />
     );
 }
+

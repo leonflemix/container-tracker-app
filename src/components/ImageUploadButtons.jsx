@@ -23,3 +23,4 @@ export default function ImageUploadButtons({ scanInputRef, uploadInputRef, onFil
         </div>
     );
 }
+
