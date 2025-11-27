@@ -80,9 +80,9 @@ function AppContent() {
 
     // --- Event Handlers ---
     
-    // MODAL HANDLERS ARE NOW SIMPLIFIED
+    // MODAL HANDLERS
     const handleOpenModal = (container = null) => {
-        setPreselectedBooking(null); // Clear preselection
+        setPreselectedBooking(null); // Clear preselection for normal opens
         openModal(container ? container.id : null); // Just pass the ID to the context
     };
 
@@ -95,7 +95,9 @@ function AppContent() {
     const handleSelectBookingForContainerAdd = (bookingId) => {
         setPreselectedBooking(bookingId);
         setIsBookingModalOpen(false);
-        handleOpenModal(null); // Open container modal for a new container
+        // FIX: Call openModal directly instead of handleOpenModal
+        // This prevents 'handleOpenModal' from clearing the preselectedBooking we just set.
+        openModal(null); 
     };
 
     const handleFilterChange = (e) => {
