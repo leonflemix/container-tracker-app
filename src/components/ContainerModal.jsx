@@ -12,7 +12,6 @@ export default function ContainerModal(props) {
     const { isArchived, preselectedBooking, onClose } = props;
 
     // Get data directly from context
-    // --- FIX: Get collections from context ---
     const { selectedContainer, events, openBookings, collections } = useAppContext(); 
 
     // Determine if this is a new container
@@ -23,7 +22,8 @@ export default function ContainerModal(props) {
         formData,
         setFormData,
         handleChange,
-        selectedBookingType
+        selectedBookingType,
+        validationState // Get validation from hook
     } = useContainerForm(selectedContainer, isNew, preselectedBooking);
 
     // 2. Manage all actions
@@ -38,7 +38,6 @@ export default function ContainerModal(props) {
     });
 
     // 3. Pass everything to the View component
-    // We pass ...props to forward `key` and `onClose`
     return (
         <ContainerModalView
             {...props}
@@ -50,8 +49,8 @@ export default function ContainerModal(props) {
             handleChange={handleChange}
             selectedBookingType={selectedBookingType}
             openBookings={openBookings}
-            collections={collections} // <-- FIX: Pass collections down
+            collections={collections}
+            validationState={validationState} // Pass validation state
         />
     );
 }
-

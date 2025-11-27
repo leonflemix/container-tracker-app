@@ -16,8 +16,13 @@ export default function NewContainerForm({
     isSaving,
     onClose,
     scanFileInputRef,
-    uploadFileInputRef
+    uploadFileInputRef,
+    validationState // Receive validation state
 }) {
+    // If validationState is passed, use it, otherwise default (defensive coding)
+    const isValid = validationState ? validationState.isValid : true;
+    const error = validationState ? validationState.error : null;
+
     return (
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
             <ImageUploadButtons
@@ -37,11 +42,25 @@ export default function NewContainerForm({
             </div>
 
             {selectedBookingType && <p className="text-sm text-gray-400">Selected Type: <span className="font-semibold text-gray-200">{selectedBookingType}</span></p>}
-            <InputField label="Container #" name="id" value={formData.id || ''} onChange={handleChange} required />
+            
+            <div>
+                <InputField label="Container #" name="id" value={formData.id || ''} onChange={handleChange} required />
+                {!isValid && error && (
+                    <p className="text-red-400 text-xs mt-1 animate-pulse">⚠️ {error}</p>
+                )}
+                {isValid && formData.id && formData.id.length === 11 && (
+                    <p className="text-green-400 text-xs mt-1">✅ Valid ISO Container ID</p>
+                )}
+            </div>
+
             <InputField label="Tare Weight" name="tareWeight" type="number" value={formData.tareWeight || 0} onChange={handleChange} />
             <div className="pt-4 flex justify-end gap-3">
                 <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg">Cancel</button>
-                <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-blue-800 disabled:cursor-not-allowed">
+                <button 
+                    type="submit" 
+                    disabled={isSaving || !isValid} // Disable save if invalid
+                    className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
                     {isSaving ? 'Saving...' : 'Add Container'}
                 </button>
             </div>

@@ -5,6 +5,7 @@ import React from 'react';
 import InputField from './InputField';
 import EventHistory from './EventHistory';
 import ConfirmationModal from './ConfirmationModal';
+import ContainerLifecycleStepper from './ContainerLifecycleStepper'; // Import Stepper
 
 import NewContainerForm from './NewContainerForm';
 import EditContainerForm from './EditContainerForm';
@@ -36,6 +37,7 @@ export default function ContainerModalView(props) {
         isAtLocation,
         selectedBookingType,
         availableStatuses,
+        validationState, // New: from hook
 
         // handlers
         handleChange,
@@ -99,6 +101,7 @@ export default function ContainerModalView(props) {
                 onClose={onClose}
                 scanFileInputRef={scanFileInputRef}
                 uploadFileInputRef={uploadFileInputRef}
+                validationState={validationState} // Pass validation
             />;
         }
 
@@ -184,7 +187,7 @@ export default function ContainerModalView(props) {
                     isSaving={isSaving}
                     setDeleteConfirmOpen={() => setDeleteConfirmOpen(true)}
                     handleUndo={handleUndo}
-                    events={events} // <-- BUG FIX: Pass events prop here
+                    events={events}
                 />
                 <div className="p-4 lg:w-1/2 lg:border-l border-gray-700">
                     <h3 className="text-lg font-semibold mb-3">Event History</h3>
@@ -207,6 +210,12 @@ export default function ContainerModalView(props) {
                     <h2 className="text-xl font-bold">{isNew ? 'Add New Container' : `Edit: ${container?.id || '...'}`}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
+
+                {/* --- ADDED STEPPER --- */}
+                {!isNew && container && <div className="bg-gray-750 border-b border-gray-700">
+                    <ContainerLifecycleStepper status={container.status} />
+                </div>}
+
                 <div className="flex-grow overflow-y-auto">
                     {(isNew || formData.id) ? renderContent() : <div className="p-6 text-center text-gray-400">Loading...</div>}
                 </div>
@@ -231,4 +240,3 @@ export default function ContainerModalView(props) {
         </div>
     );
 }
-

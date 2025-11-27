@@ -5,17 +5,14 @@ import React, { useState } from 'react';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import InputField from './InputField';
-import { useAppContext } from '../context/AppContext'; // Import context
+import { useAppContext } from '../context/AppContext';
 
 export default function ReportsPage() {
-    // Get data from context
-    const { paths, collections: collectionsData, addToast } = useAppContext(); // <-- Get addToast
+    const { paths, collections: collectionsData, addToast } = useAppContext();
     const { archivePath } = paths;
 
-    // --- FIX: Add defensive check for collectionsData and drivers ---
     const collections = collectionsData || {};
     const drivers = collections.drivers || [];
-    // ---
 
     const [reportType, setReportType] = useState('');
     const [startDate, setStartDate] = useState('');
@@ -26,7 +23,7 @@ export default function ReportsPage() {
 
     const handleGenerateReport = async () => {
         if (!reportType) {
-            addToast('Please select a report type.', 'error'); // <-- Use addToast
+            addToast('Please select a report type.', 'error');
             return;
         }
 
@@ -38,12 +35,14 @@ export default function ReportsPage() {
             let summary = '';
             const isDateRangeReport = ['shippedByDate', 'byDriver', 'holesBefore', 'holesAfterOnly'].includes(reportType);
             if (isDateRangeReport && (!startDate || !endDate)) {
-                addToast('Please select a start and end date.', 'error'); // <-- Use addToast
+                addToast('Please select a start and end date.', 'error');
                 setIsLoading(false);
                 return;
             }
             const start = isDateRangeReport ? Timestamp.fromDate(new Date(startDate)) : null;
             const end = isDateRangeReport ? Timestamp.fromDate(new Date(endDate)) : null;
+            // Set end date to end of day
+            if (end) end.seconds += 86399; 
 
             if (reportType === 'shippedByDate') {
                 q = query(collection(db, archivePath), where('archivedAt', '>=', start), where('archivedAt', '<=', end));
@@ -56,7 +55,7 @@ export default function ReportsPage() {
                 summary = (size) => `Found ${size} containers with holes only after squishing in this period.`;
             } else if (reportType === 'byDriver') {
                 if (!selectedDriver) {
-                    addToast('Please select a driver.', 'error'); // <-- Use addToast
+                    addToast('Please select a driver.', 'error');
                     setIsLoading(false);
                     return;
                 }
@@ -73,11 +72,44 @@ export default function ReportsPage() {
 
         } catch (error) {
             console.error("Error generating report:", error);
-            addToast('Error generating report. You may need to create a composite index in Firestore. Check the console.', 'error');
-            setReportData({ summary: 'Error generating report. You may need to create a composite index in Firestore. Check the console for a direct link.', data: [] });
+            addToast('Error generating report. Check console for index link.', 'error');
+            setReportData({ summary: 'Error generating report.', data: [] });
         }
 
         setIsLoading(false);
+    };
+
+    // --- NEW: CSV Export Logic ---
+    const downloadCSV = () => {
+        if (!reportData || !reportData.data || reportData.data.length === 0) return;
+
+        const headers = ["Container #", "Booking #", "Type", "Driver", "Seal", "Archived Date", "Days in Yard", "Holes Before", "Holes After"];
+        const rows = reportData.data.map(c => [
+            c.id,
+            c.booking,
+            c.bookedFor,
+            c.deliveryDriver || '',
+            c.seal || '',
+            c.archivedAt ? new Date(c.archivedAt.seconds * 1000).toLocaleDateString() : '',
+            c.daysInYard || '',
+            c.hasHolesBeforeSquish ? 'Yes' : 'No',
+            c.hasHolesAfterSquish ? 'Yes' : 'No'
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(e => e.join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `report_${reportType}_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     return (
@@ -121,8 +153,21 @@ export default function ReportsPage() {
 
             {reportData && (
                 <div className="mt-6 p-4 bg-gray-700 rounded-lg">
-                    <h3 className="font-semibold text-lg">Report Result:</h3>
-                    <p className="mt-2 text-gray-200">{reportData.summary}</p>
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 className="font-semibold text-lg">Report Result:</h3>
+                            <p className="mt-1 text-gray-200">{reportData.summary}</p>
+                        </div>
+                        {reportData.data && reportData.data.length > 0 && (
+                            <button 
+                                onClick={downloadCSV}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow flex items-center"
+                            >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                Download CSV
+                            </button>
+                        )}
+                    </div>
                     {reportData.data && reportData.data.length > 0 && (
                         <div className="mt-4 overflow-x-auto">
                             <table className="min-w-full text-sm text-left text-gray-300">
@@ -156,4 +201,3 @@ export default function ReportsPage() {
         </div>
     );
 }
-

@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
+import { validateContainerId } from '../utils/isoValidation'; // Import validation
 
 /**
  * Manages the state of the container form (formData) and related derived state.
- * @param {object | null} container - The container being edited, or null if new.
- * @param {boolean} isNew - True if this is a new container.
- * @param {string | null} preselectedBooking - A booking ID to pre-populate.
  */
 export default function useContainerForm(container, isNew, preselectedBooking) {
     const {
@@ -41,11 +39,12 @@ export default function useContainerForm(container, isNew, preselectedBooking) {
         return {}; // Default empty state
     });
 
-    // Effect to sync formData if the container prop changes (e.g., in archive view)
-    // or if a preselected booking is added.
+    // Validation State
+    const [validationState, setValidationState] = useState({ isValid: true, error: null });
+
+    // Effect to sync formData if the container prop changes
     useEffect(() => {
         if (!isNew && container) {
-            // Only reset form if the container ID actually changes
             if (!formData.id || formData.id !== container.id) {
                 setFormData({
                     id: container.id || '',
@@ -65,8 +64,6 @@ export default function useContainerForm(container, isNew, preselectedBooking) {
                 });
             }
         } else if (isNew) {
-            // If the modal is already open and the user selects a booking from
-            // the booking modal, this will update the form.
             if (preselectedBooking && formData.booking !== preselectedBooking) {
                 setFormData(prev => ({ ...prev, booking: preselectedBooking }));
             }
@@ -74,11 +71,18 @@ export default function useContainerForm(container, isNew, preselectedBooking) {
                 setFormData(prev => ({ ...prev, status: 'New' }));
             }
         }
-    // We only want this to run when the *identity* of the container changes,
-    // or when the preselectedBooking changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [container, isNew, preselectedBooking]);
 
+    // Validation Effect
+    useEffect(() => {
+        if (formData.id) {
+            const result = validateContainerId(formData.id);
+            setValidationState(result);
+        } else {
+            setValidationState({ isValid: true, error: null }); // Reset if empty
+        }
+    }, [formData.id]);
 
     // Generic change handler for form inputs
     const handleChange = (e) => {
@@ -99,6 +103,11 @@ export default function useContainerForm(container, isNew, preselectedBooking) {
             } else {
                 newFormData.bookedFor = 'N/A';
             }
+        }
+
+        // Force ID to uppercase
+        if (name === 'id') {
+            newFormData.id = value.toUpperCase();
         }
 
         setFormData(newFormData);
@@ -122,6 +131,7 @@ export default function useContainerForm(container, isNew, preselectedBooking) {
         formData,
         setFormData,
         handleChange,
-        selectedBookingType
+        selectedBookingType,
+        validationState // Export validation state
     };
 }
