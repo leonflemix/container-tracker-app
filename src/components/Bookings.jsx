@@ -12,7 +12,8 @@ import { CONTAINER_STATUSES } from '../constants';
 export default function Bookings() {
     // --- Get data from context ---
     const {
-        bookings, // Get all bookings
+        bookings, // Open bookings
+        archivedBookings, // Filled bookings (newly added to destructuring)
         filledBookingCounts,
         paths,
         collections: collectionsData,
@@ -39,19 +40,24 @@ export default function Bookings() {
     const [isSaving, setIsSaving] = useState(false);
 
     // --- Derived Data: Filter bookings to show ---
-    // Show booking if:
-    // 1. It is not full (open)
-    // 2. OR it has active containers (live in yard/processing) even if full
+    // Logic: 
+    // 1. Show all 'bookings' (Open/Active list).
+    // 2. Show 'archivedBookings' ONLY if they have live containers (Active in Yard).
     const visibleBookings = useMemo(() => {
-        if (!bookings) return [];
-        return bookings.filter(booking => {
-            const filledCount = filledBookingCounts[booking.id] || 0;
-            const isOpen = filledCount < booking.quantity;
-            // Check if there are any active (non-archived) containers for this booking
-            const hasActiveContainers = containers.some(c => c.booking === booking.id);
-            return isOpen || hasActiveContainers;
+        const openList = bookings || [];
+        const archivedList = archivedBookings || [];
+
+        // Filter archived bookings to only those with live containers
+        const activeArchived = archivedList.filter(booking => {
+            return containers.some(c => c.booking === booking.id);
         });
-    }, [bookings, filledBookingCounts, containers]);
+
+        // Merge lists. (Use Map to deduplicate by ID if necessary, though collections usually distinct)
+        const combined = [...openList, ...activeArchived];
+        const uniqueMap = new Map(combined.map(b => [b.id, b]));
+        
+        return Array.from(uniqueMap.values());
+    }, [bookings, archivedBookings, containers]);
 
     // --- Derived Data: Containers for the viewing booking ---
     const selectedBookingContainers = useMemo(() => {
@@ -65,6 +71,18 @@ export default function Bookings() {
             return dateB - dateA;
         });
     }, [viewingBooking, containers, archivedContainers]);
+
+    // --- Helper: Get Accurate Filled Count ---
+    // filledBookingCounts context might only track 'bookings', so we fallback to manual calc for archived ones
+    const getFilledCount = (bookingId) => {
+        if (filledBookingCounts && typeof filledBookingCounts[bookingId] === 'number') {
+            return filledBookingCounts[bookingId];
+        }
+        // Fallback calculation
+        const liveCount = containers.filter(c => c.booking === bookingId).length;
+        const archivedCount = archivedContainers.filter(c => c.booking === bookingId).length;
+        return liveCount + archivedCount;
+    };
 
     // --- Handlers ---
     const openForm = (booking = null, e = null) => {
@@ -236,7 +254,7 @@ export default function Bookings() {
                         </div>
                          <div>
                             <span className="text-gray-400 block">Filled</span>
-                            <span className="font-bold text-lg text-white">{(filledBookingCounts || {})[viewingBooking.id] || 0}</span>
+                            <span className="font-bold text-lg text-white">{getFilledCount(viewingBooking.id)}</span>
                         </div>
                     </div>
 
@@ -295,7 +313,7 @@ export default function Bookings() {
                 // --- GRID VIEW (VISIBLE BOOKINGS) ---
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {visibleBookings.map(booking => {
-                        const filled = (filledBookingCounts || {})[booking.id] || 0;
+                        const filled = getFilledCount(booking.id);
                         const progress = Math.min((filled / booking.quantity) * 100, 100);
                         const isFull = filled >= booking.quantity;
                         
@@ -335,14 +353,17 @@ export default function Bookings() {
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm text-gray-300">
                                         <span>Progress</span>
-                                        <span className={filled >= booking.quantity ? "text-green-400 font-bold" : ""}>{filled} / {booking.quantity}</span>
+                                        <span className={isFull ? "text-green-400 font-bold" : ""}>{filled} / {booking.quantity}</span>
                                     </div>
                                     <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
                                         <div 
-                                            className={`h-full transition-all duration-500 ${filled >= booking.quantity ? 'bg-green-500' : 'bg-blue-600'}`} 
+                                            className={`h-full transition-all duration-500 ${isFull ? 'bg-green-500' : 'bg-blue-600'}`} 
                                             style={{ width: `${progress}%` }}
                                         ></div>
                                     </div>
+                                    {isFull && containers.some(c => c.booking === booking.id) && (
+                                        <p className="text-xs text-yellow-500 mt-1">⚠️ Full but has active containers in yard</p>
+                                    )}
                                 </div>
                             </div>
                         );
