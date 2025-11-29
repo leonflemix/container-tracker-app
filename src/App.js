@@ -4,36 +4,43 @@
 import React, { useState, useMemo } from 'react';
 // We no longer need data-fetching imports here
 import { CONTAINER_STATUSES } from './constants';
+// --- ADDED MapPinIcon directly here since I can't edit icons.jsx easily without a full file rewrite, 
+// OR I can just assume it exists or use a generic one. I'll define it inline here for safety or import if you update icons.jsx later.
+// For now, let's reuse a generic icon from your list or assume I can add it. 
+// I will reuse "DatabaseIcon" visually if needed, but let's assume standard icons. 
+// Actually, I'll add the MapPinIcon definition inside the icons import block if I could, but I can't edit that file partially.
+// I will just use the "HomeIcon" or similar for now in the button, or define a local SVG.
 import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
-import Bookings from './components/Bookings'; // Import new Bookings page
+import Bookings from './components/Bookings';
+import Locations from './components/Locations'; // Import new Locations page
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
 import { ToastProvider } from './hooks/useToasts';
 import Dashboard from './components/Dashboard';
-import { AppProvider, useAppContext } from './context/AppContext'; // Import context
+import { AppProvider, useAppContext } from './context/AppContext';
+
+// Simple inline icon for Locations to avoid breaking if icons.jsx isn't updated
+const MapIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+);
 
 // Main App Component Content
 function AppContent() {
-    // --- All data state is now in AppContext ---
     const {
         containers,
         archivedContainers,
         collections,
         loading,
         recentlyUpdated,
-        
-        // --- MODAL STATE AND HANDLERS FROM CONTEXT ---
         isModalOpen,
         openModal,
         closeModal,
         selectedContainer,
         selectedContainerId
-        // ---
-        
     } = useAppContext();
     
     // --- LOCAL UI STATE ---
@@ -41,7 +48,7 @@ function AppContent() {
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
     const [preselectedBooking, setPreselectedBooking] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', 'reports', or 'bookings'
+    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', 'reports', 'bookings', 'locations'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
     // State for sorting and filtering
@@ -81,23 +88,19 @@ function AppContent() {
 
     // --- Event Handlers ---
     
-    // MODAL HANDLERS
     const handleOpenModal = (container = null) => {
-        setPreselectedBooking(null); // Clear preselection for normal opens
-        openModal(container ? container.id : null); // Just pass the ID to the context
+        setPreselectedBooking(null);
+        openModal(container ? container.id : null);
     };
 
     const handleCloseModal = () => {
         closeModal();
-        setPreselectedBooking(null); // Clear preselection on close
+        setPreselectedBooking(null);
     };
     
-    // This handler is for the Booking Modal
     const handleSelectBookingForContainerAdd = (bookingId) => {
         setPreselectedBooking(bookingId);
         setIsBookingModalOpen(false);
-        // FIX: Call openModal directly instead of handleOpenModal
-        // This prevents 'handleOpenModal' from clearing the preselectedBooking we just set.
         openModal(null); 
     };
 
@@ -123,7 +126,6 @@ function AppContent() {
     const processedContainers = useMemo(() => {
         let sourceData = pageView === 'live' ? containers : archivedContainers;
 
-        // 1. Filtering
         let filtered = sourceData.filter(c => {
             const searchMatch = !searchTerm ||
                 c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -138,7 +140,6 @@ function AppContent() {
             return searchMatch && statusMatch && typeMatch;
         });
 
-        // 2. Sorting
         if (sortConfig.key) {
             filtered.sort((a, b) => {
                 const aValue = a[sortConfig.key];
@@ -169,6 +170,9 @@ function AppContent() {
         }
         if (pageView === 'bookings') {
             return <Bookings />;
+        }
+        if (pageView === 'locations') {
+            return <Locations />;
         }
         
         return (
@@ -242,7 +246,7 @@ function AppContent() {
                             <ContainerCard 
                                 key={container.id} 
                                 container={container} 
-                                onSelect={handleOpenModal} // Use the simplified handler
+                                onSelect={handleOpenModal} 
                                 isArchived={pageView === 'archive'}
                                 containerTypes={collections.containerTypes}
                                 recentlyUpdated={recentlyUpdated}
@@ -253,7 +257,7 @@ function AppContent() {
                     <GridContainerView 
                         containers={processedContainers}
                         collections={collections}
-                        onEdit={handleOpenModal} // Use the simplified handler
+                        onEdit={handleOpenModal} 
                         isArchived={pageView === 'archive'}
                         recentlyUpdated={recentlyUpdated}
                     />
@@ -269,15 +273,14 @@ function AppContent() {
             case 'archive': return 'Archived Containers';
             case 'reports': return 'Reports';
             case 'bookings': return 'Bookings Management';
+            case 'locations': return 'Location Overview';
             default: return 'Container Tracker';
         }
     };
 
-    // This logic prevents the modal from showing an "edit" screen
-    // with "new" data (or vice-versa) during the re-render
     const canRenderModal = isModalOpen && (
-        (selectedContainerId === null) || // We are creating a new container
-        (selectedContainerId && selectedContainer) // We are editing and the container data has been loaded
+        (selectedContainerId === null) || 
+        (selectedContainerId && selectedContainer)
     );
 
     return (
@@ -324,6 +327,13 @@ function AppContent() {
                             Bookings
                         </button>
                         <button
+                            onClick={() => setPageView('locations')}
+                            className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <MapIcon />
+                            Locations
+                        </button>
+                        <button
                             onClick={() => setPageView('archive')}
                             className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
@@ -344,7 +354,6 @@ function AppContent() {
                             <DatabaseIcon />
                             Collections
                         </button>
-                        {/* We kept the Quick Add Booking button, but renamed/restyled or keep as 'Add Booking' if you want a shortcut */}
                         <button
                             onClick={() => setIsBookingModalOpen(true)}
                             className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
@@ -353,7 +362,7 @@ function AppContent() {
                             Quick Add Booking
                         </button>
                         <button
-                            onClick={() => handleOpenModal(null)} // Simplified
+                            onClick={() => handleOpenModal(null)} 
                             className="flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
                             <PlusIcon />
@@ -364,15 +373,10 @@ function AppContent() {
                 {renderMainContent()}
             </div>
 
-            {/* --- MODAL RENDERING --- */}
-            {/* The modal is only rendered when it's open AND the data is ready */}
-            {/* The key prop is CRITICAL to force remount when the ID changes */}
             {canRenderModal && (
                 <ContainerModal
                     key={selectedContainerId} 
                     onClose={handleCloseModal}
-                    // All data is now passed from context,
-                    // but we still pass these props
                     isArchived={pageView === 'archive'}
                     preselectedBooking={preselectedBooking}
                 />
@@ -381,7 +385,6 @@ function AppContent() {
             {isBookingModalOpen && (
                 <BookingModal
                     onClose={() => setIsBookingModalOpen(false)}
-                    // No props needed, it will get data from context
                     onSelectBookingForContainerAdd={handleSelectBookingForContainerAdd}
                 />
             )}
@@ -389,7 +392,6 @@ function AppContent() {
             {isCollectionsModalOpen && (
                 <CollectionsModal
                     onClose={() => setIsCollectionsModalOpen(false)}
-                    // No props needed, it will get data from context
                 />
             )}
         </div>
@@ -399,7 +401,6 @@ function AppContent() {
 // Wrap AppContent with the provider
 export default function App() {
     return (
-        // The ToastProvider MUST wrap the AppProvider
         <ToastProvider>
             <AppProvider>
                 <AppContent />
