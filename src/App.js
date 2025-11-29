@@ -8,6 +8,7 @@ import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, Chart
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
+import Bookings from './components/Bookings'; // Import new Bookings page
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
@@ -40,7 +41,7 @@ function AppContent() {
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
     const [preselectedBooking, setPreselectedBooking] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', or 'reports'
+    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', 'reports', or 'bookings'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
     // State for sorting and filtering
@@ -161,12 +162,13 @@ function AppContent() {
 
     const renderMainContent = () => {
         if (pageView === 'dashboard') {
-            // Pass the handler as 'onOpen'
             return <Dashboard onOpen={handleContainerSelectFromDashboard} />;
         }
         if (pageView === 'reports') {
-            // No props needed!
             return <ReportsPage />;
+        }
+        if (pageView === 'bookings') {
+            return <Bookings />;
         }
         
         return (
@@ -266,6 +268,7 @@ function AppContent() {
             case 'live': return 'Container Yard Tracker';
             case 'archive': return 'Archived Containers';
             case 'reports': return 'Reports';
+            case 'bookings': return 'Bookings Management';
             default: return 'Container Tracker';
         }
     };
@@ -314,6 +317,13 @@ function AppContent() {
                             Live Yard
                         </button>
                         <button
+                            onClick={() => setPageView('bookings')}
+                            className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <DocumentPlusIcon />
+                            Bookings
+                        </button>
+                        <button
                             onClick={() => setPageView('archive')}
                             className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
@@ -334,12 +344,13 @@ function AppContent() {
                             <DatabaseIcon />
                             Collections
                         </button>
+                        {/* We kept the Quick Add Booking button, but renamed/restyled or keep as 'Add Booking' if you want a shortcut */}
                         <button
                             onClick={() => setIsBookingModalOpen(true)}
                             className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
                             <DocumentPlusIcon />
-                            Add Booking
+                            Quick Add Booking
                         </button>
                         <button
                             onClick={() => handleOpenModal(null)} // Simplified
