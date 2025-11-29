@@ -5,10 +5,10 @@ import React, { useState, useMemo } from 'react';
 import { db, Timestamp } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import InputField from './InputField';
-import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon } from '../icons';
+import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon, UndoIcon } from '../icons'; // Added UndoIcon
 import { useAppContext } from '../context/AppContext';
 import { CONTAINER_STATUSES } from '../constants';
-import { archiveBooking } from '../services/containerService'; // Import new service
+import { archiveBooking, unarchiveBooking } from '../services/containerService'; // Import new service
 
 export default function Bookings() {
     // --- Get data from context ---
@@ -25,7 +25,7 @@ export default function Bookings() {
         openModal
     } = useAppContext();
     
-    const { bookingsPath, archivedBookingsPath } = paths; // Get archived path
+    const { bookingsPath, archivedBookingsPath } = paths; 
     const collections = collectionsData || {};
     const containerTypes = collections.containerTypes || [];
 
@@ -46,9 +46,6 @@ export default function Bookings() {
         if (activeTab === 'archived') {
             return archivedBookings || [];
         }
-        // Active tab: Show all 'bookings' from the main collection.
-        // Since we disabled auto-archiving, 'bookings' now contains both
-        // partially filled AND full bookings that haven't been manually archived yet.
         return bookings || [];
     }, [activeTab, bookings, archivedBookings]);
 
@@ -113,7 +110,7 @@ export default function Bookings() {
         openModal(null); 
     };
 
-    // --- NEW: Handle Manual Archive ---
+    // --- Handle Manual Archive ---
     const handleArchiveClick = async (booking, e) => {
         e.stopPropagation();
         if (!window.confirm(`Are you sure you want to archive Booking ${booking.id}? This will remove it from the Active list.`)) return;
@@ -129,6 +126,27 @@ export default function Bookings() {
         } catch (error) {
             console.error("Error archiving booking:", error);
             addToast("Failed to archive booking.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // --- NEW: Handle Unarchive (Restore) ---
+    const handleUnarchiveClick = async (booking, e) => {
+        e.stopPropagation();
+        if (!window.confirm(`Move Booking ${booking.id} back to Active list?`)) return;
+        
+        setIsSaving(true);
+        try {
+            await unarchiveBooking({
+                bookingsPath,
+                archivedBookingsPath,
+                booking
+            });
+            addToast(`Booking ${booking.id} moved back to Active.`, 'success');
+        } catch (error) {
+            console.error("Error unarchiving booking:", error);
+            addToast("Failed to move booking to active.", 'error');
         } finally {
             setIsSaving(false);
         }
@@ -150,7 +168,16 @@ export default function Bookings() {
         }
         setIsSaving(true);
         const bookingId = (editingBooking ? editingBooking.id : formData.id).toUpperCase();
-        const bookingRef = doc(db, bookingsPath, bookingId);
+        
+        // --- LOGIC CHANGE: Determine correct path based on where the booking is ---
+        // If we are editing a booking that exists in the archived list, save it there.
+        // Otherwise, save to active.
+        let targetPath = bookingsPath;
+        if (editingBooking && activeTab === 'archived') {
+            targetPath = archivedBookingsPath;
+        }
+
+        const bookingRef = doc(db, targetPath, bookingId);
 
         const dataToSave = {
             id: bookingId,
@@ -158,7 +185,7 @@ export default function Bookings() {
             type: formData.type,
         };
 
-        // Only add createdAt for new bookings
+        // Only add createdAt for new bookings (which only happens in active tab)
         if (!editingBooking) {
             dataToSave.createdAt = Timestamp.now();
         }
@@ -175,7 +202,6 @@ export default function Bookings() {
         }
     };
 
-    // Helper to get emoji for status
     const getStatusEmoji = (status) => {
         const found = CONTAINER_STATUSES.find(s => s.label === status);
         return found ? found.emoji : '📍';
@@ -271,7 +297,7 @@ export default function Bookings() {
                     </form>
                 </div>
             ) : viewingBooking ? (
-                // --- DETAIL VIEW (CONTAINER GRID) ---
+                // --- DETAIL VIEW ---
                 <div>
                     <div className="bg-gray-700 p-4 rounded-lg mb-6 flex flex-wrap gap-6 text-sm">
                          <div>
@@ -301,7 +327,6 @@ export default function Bookings() {
                     {selectedBookingContainers.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {selectedBookingContainers.map(container => {
-                                // Check if archived by looking at properties
                                 const isArchived = !!container.archivedAt;
                                 return (
                                     <div 
@@ -348,7 +373,7 @@ export default function Bookings() {
                     )}
                 </div>
             ) : (
-                // --- GRID VIEW (VISIBLE BOOKINGS) ---
+                // --- GRID VIEW ---
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {visibleBookings.map(booking => {
                         const filled = getFilledCount(booking.id);
@@ -369,16 +394,16 @@ export default function Bookings() {
                                         </span>
                                     </div>
                                     <div className="flex gap-1">
-                                        {activeTab === 'active' && (
-                                            <button 
-                                                onClick={(e) => openForm(booking, e)} 
-                                                className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10"
-                                                title="Edit Booking"
-                                            >
-                                                <PencilIcon />
-                                            </button>
-                                        )}
+                                        {/* Edit Button (Available in both tabs) */}
+                                        <button 
+                                            onClick={(e) => openForm(booking, e)} 
+                                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10"
+                                            title="Edit Booking"
+                                        >
+                                            <PencilIcon />
+                                        </button>
                                         
+                                        {/* Add Container (Only Active and Not Full) */}
                                         {activeTab === 'active' && !isFull && (
                                             <button 
                                                 onClick={(e) => handleAddContainerClick(booking.id, e)}
@@ -389,7 +414,7 @@ export default function Bookings() {
                                             </button>
                                         )}
 
-                                        {/* Show Archive Button ONLY when Full and Active */}
+                                        {/* Archive Button (Only Active and Full) */}
                                         {activeTab === 'active' && isFull && (
                                             <button
                                                 onClick={(e) => handleArchiveClick(booking, e)}
@@ -397,6 +422,17 @@ export default function Bookings() {
                                                 title="Archive Full Booking"
                                             >
                                                 <ArchiveIcon />
+                                            </button>
+                                        )}
+
+                                        {/* Unarchive Button (Only Archived Tab) */}
+                                        {activeTab === 'archived' && (
+                                            <button
+                                                onClick={(e) => handleUnarchiveClick(booking, e)}
+                                                className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-600 rounded-full transition-colors z-10"
+                                                title="Move back to Active"
+                                            >
+                                                <UndoIcon />
                                             </button>
                                         )}
                                     </div>

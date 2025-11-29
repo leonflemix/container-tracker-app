@@ -5,13 +5,11 @@ import { db, Timestamp } from '../firebase';
 import {
     collection,
     doc,
-    setDoc,
-    addDoc,
     deleteDoc,
     query,
     where,
     getDocs,
-    getDoc, // <-- THIS IS THE FIX
+    getDoc,
     writeBatch
 } from 'firebase/firestore';
 import { calculateDaysBetween } from '../utils/dates';
@@ -55,16 +53,12 @@ export async function createContainerWithBooking({
         timestamp: Timestamp.now(),
         details: { 
             action: `Container created with status: New for booking ${formData.booking}`,
-            previousData: null // No previous data for a new container
+            previousData: null
         }
     };
 
     batch.set(containerRef, dataToSave);
     batch.set(doc(collection(db, eventsPath)), eventData);
-
-    // --- REMOVED AUTO-ARCHIVING LOGIC HERE ---
-    // Bookings now stay in the active list even when full, 
-    // until manually archived via the Bookings page.
 
     await batch.commit();
     return { success: true };
@@ -87,7 +81,6 @@ export async function updateContainerWithChanges({
     const changes = [];
     for (const key in dataToUpdate) {
         if (Object.hasOwnProperty.call(dataToUpdate, key) && dataToUpdate[key] !== container[key]) {
-            // Handle Timestamp comparisons
             const oldVal = container[key];
             const newVal = dataToUpdate[key];
             
@@ -106,7 +99,6 @@ export async function updateContainerWithChanges({
         }
     }
 
-    // Ensure ID is set correctly (it might not be in formData if disabled)
     dataToUpdate.id = container.id.toUpperCase();
 
     if (changes.length === 0) {
@@ -116,14 +108,13 @@ export async function updateContainerWithChanges({
     const batch = writeBatch(db);
     batch.set(containerRef, dataToUpdate, { merge: true });
     
-    // --- NEW: Store the *entire* previous container state in the event ---
     const eventData = {
         containerId: container.id.toUpperCase(),
         timestamp: Timestamp.now(),
         details: { 
             action: 'Container updated', 
             changes: changes.join('; '),
-            previousData: container // Save the exact previous state
+            previousData: container
         }
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -144,8 +135,6 @@ export async function deleteContainerAndEvents({ containersPath, eventsPath, con
 
 export async function moveContainerToLocation({ containersPath, eventsPath, containerId, selectedLocation, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    
-    // Use provided container data if available, otherwise fetch it
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
 
@@ -158,7 +147,7 @@ export async function moveContainerToLocation({ containersPath, eventsPath, cont
         details: { 
             action: 'Container moved to location', 
             changes: `Status changed from '${containerData.status}' to '${selectedLocation}'`,
-            previousData: containerData // Save previous state
+            previousData: containerData
         }
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -168,8 +157,6 @@ export async function moveContainerToLocation({ containersPath, eventsPath, cont
 
 export async function markContainerAsLoaded({ containersPath, eventsPath, containerId, oldStatus, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-
-    // Use provided container data if available, otherwise fetch it
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
     
@@ -183,7 +170,7 @@ export async function markContainerAsLoaded({ containersPath, eventsPath, contai
         details: { 
             action: 'Container loaded', 
             changes: `Status changed from '${oldStatus}' to '${newStatus}'`,
-            previousData: containerData // Save previous state
+            previousData: containerData
         }
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -193,8 +180,6 @@ export async function markContainerAsLoaded({ containersPath, eventsPath, contai
 
 export async function assignDriverToContainer({ containersPath, eventsPath, containerId, selectedDriver, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    
-    // Use provided container data if available, otherwise fetch it
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
 
@@ -208,7 +193,7 @@ export async function assignDriverToContainer({ containersPath, eventsPath, cont
         details: { 
             action: 'Assigned to delivery driver', 
             changes: `Assigned to ${selectedDriver}`,
-            previousData: containerData // Save previous state
+            previousData: containerData
         }
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -216,28 +201,22 @@ export async function assignDriverToContainer({ containersPath, eventsPath, cont
     return { assigned: true };
 }
 
-// --- REWRITTEN: Robust Undo ---
 export async function undoLastUpdate({ containersPath, eventsPath, containerId, lastEventId, dataToRestore }) {
     if (!containerId || !lastEventId || !dataToRestore) {
         throw new Error('Missing required arguments for undo.');
     }
     
     const containerRef = doc(db, containersPath, containerId);
-    
-    // 2. Prepare the data to write
     const dataToWrite = { ...dataToRestore };
 
-    // 3. Convert any plain date objects (from JSON-like previousData) back to Timestamps
     if (dataToWrite.createdAt && !(dataToWrite.createdAt instanceof Timestamp) && typeof dataToWrite.createdAt.seconds === 'number') {
         dataToWrite.createdAt = Timestamp.fromMillis(dataToWrite.createdAt.seconds * 1000);
     }
-    // Set lastUpdate to now, not the restored time
     dataToWrite.lastUpdate = Timestamp.now(); 
     
-    // 4. Atomically set the restored data and delete the "undo" event
     const batch = writeBatch(db);
-    batch.set(containerRef, dataToWrite); // Overwrite with the restored state
-    batch.delete(doc(db, eventsPath, lastEventId)); // Delete the event we just undid
+    batch.set(containerRef, dataToWrite); 
+    batch.delete(doc(db, eventsPath, lastEventId)); 
     
     await batch.commit();
     return { undone: true };
@@ -267,7 +246,7 @@ export async function pierAcceptAndArchive({ containersPath, eventsPath, archive
         timestamp: now, 
         details: { 
             action: 'Pier Accepted & Archived',
-            previousData: container // Save state before archiving
+            previousData: container
         } 
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -277,8 +256,6 @@ export async function pierAcceptAndArchive({ containersPath, eventsPath, archive
 
 export async function returnToTilter({ containersPath, eventsPath, containerId, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId);
-    
-    // Use provided container data if available, otherwise fetch it
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
 
@@ -291,7 +268,7 @@ export async function returnToTilter({ containersPath, eventsPath, containerId, 
         timestamp: Timestamp.now(), 
         details: { 
             action: 'Pier Denied - Returned to Tilter/Location',
-            previousData: containerData // Save previous state
+            previousData: containerData
         } 
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -301,8 +278,6 @@ export async function returnToTilter({ containersPath, eventsPath, containerId, 
 
 export async function markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId);
-    
-    // Use provided container data if available, otherwise fetch it
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
 
@@ -315,7 +290,7 @@ export async function markDeniedAwaitingUpdate({ containersPath, eventsPath, con
         timestamp: Timestamp.now(), 
         details: { 
             action: 'Pier Denied - Awaiting Further Updates',
-            previousData: containerData // Save previous state
+            previousData: containerData
         } 
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -344,7 +319,7 @@ export async function reviveContainer({ containersPath, eventsPath, archivePath,
         timestamp: Timestamp.now(), 
         details: { 
             action: 'Container Revived - Awaiting Update',
-            previousData: null // No previous state in the live yard
+            previousData: null
         } 
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -354,8 +329,6 @@ export async function reviveContainer({ containersPath, eventsPath, archivePath,
 
 export async function markContainerAsRepaired({ containersPath, eventsPath, containerId, oldStatus, containerData: providedContainerData }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
-    
-    // Use provided container data if available, otherwise fetch it
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
 
@@ -372,7 +345,7 @@ export async function markContainerAsRepaired({ containersPath, eventsPath, cont
         details: { 
             action: 'Container repaired', 
             changes: `Status changed from '${oldStatus}' to '${newStatus}'`,
-            previousData: containerData // Save previous state
+            previousData: containerData
         }
     };
     batch.set(doc(collection(db, eventsPath)), eventData);
@@ -380,7 +353,7 @@ export async function markContainerAsRepaired({ containersPath, eventsPath, cont
     return { repaired: true };
 }
 
-// --- NEW: Manual Archive for Bookings ---
+// Manual Archive for Bookings
 export async function archiveBooking({ bookingsPath, archivedBookingsPath, booking }) {
     const bookingToArchiveRef = doc(db, bookingsPath, booking.id);
     const archivedBookingRef = doc(db, archivedBookingsPath, booking.id);
@@ -393,4 +366,21 @@ export async function archiveBooking({ bookingsPath, archivedBookingsPath, booki
     
     await batch.commit();
     return { archived: true };
+}
+
+// --- NEW: Unarchive Booking (Move back to active) ---
+export async function unarchiveBooking({ bookingsPath, archivedBookingsPath, booking }) {
+    const bookingToActiveRef = doc(db, bookingsPath, booking.id);
+    const archivedBookingRef = doc(db, archivedBookingsPath, booking.id);
+    
+    // Create data for active (remove archivedAt)
+    const activeBookingData = { ...booking };
+    delete activeBookingData.archivedAt;
+    
+    const batch = writeBatch(db);
+    batch.set(bookingToActiveRef, activeBookingData);
+    batch.delete(archivedBookingRef);
+    
+    await batch.commit();
+    return { unarchived: true };
 }
