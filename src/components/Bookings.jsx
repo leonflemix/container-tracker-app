@@ -8,12 +8,13 @@ import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon } from '../icons';
 import { useAppContext } from '../context/AppContext';
 import { CONTAINER_STATUSES } from '../constants';
+import { archiveBooking } from '../services/containerService'; // Import new service
 
 export default function Bookings() {
     // --- Get data from context ---
     const {
         bookings, // Open bookings
-        archivedBookings, // Filled bookings (newly added to destructuring)
+        archivedBookings, // Filled/Archived bookings
         filledBookingCounts,
         paths,
         collections: collectionsData,
@@ -24,11 +25,12 @@ export default function Bookings() {
         openModal
     } = useAppContext();
     
-    const { bookingsPath } = paths;
+    const { bookingsPath, archivedBookingsPath } = paths; // Get archived path
     const collections = collectionsData || {};
     const containerTypes = collections.containerTypes || [];
 
     // --- Local State ---
+    const [activeTab, setActiveTab] = useState('active'); // 'active' or 'archived'
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null);
     const [viewingBooking, setViewingBooking] = useState(null); // Track selected booking for drill-down
@@ -39,25 +41,16 @@ export default function Bookings() {
     });
     const [isSaving, setIsSaving] = useState(false);
 
-    // --- Derived Data: Filter bookings to show ---
-    // Logic: 
-    // 1. Show all 'bookings' (Open/Active list).
-    // 2. Show 'archivedBookings' ONLY if they have live containers (Active in Yard).
+    // --- Derived Data: Filter bookings based on Tab ---
     const visibleBookings = useMemo(() => {
-        const openList = bookings || [];
-        const archivedList = archivedBookings || [];
-
-        // Filter archived bookings to only those with live containers
-        const activeArchived = archivedList.filter(booking => {
-            return containers.some(c => c.booking === booking.id);
-        });
-
-        // Merge lists. (Use Map to deduplicate by ID if necessary, though collections usually distinct)
-        const combined = [...openList, ...activeArchived];
-        const uniqueMap = new Map(combined.map(b => [b.id, b]));
-        
-        return Array.from(uniqueMap.values());
-    }, [bookings, archivedBookings, containers]);
+        if (activeTab === 'archived') {
+            return archivedBookings || [];
+        }
+        // Active tab: Show all 'bookings' from the main collection.
+        // Since we disabled auto-archiving, 'bookings' now contains both
+        // partially filled AND full bookings that haven't been manually archived yet.
+        return bookings || [];
+    }, [activeTab, bookings, archivedBookings]);
 
     // --- Derived Data: Containers for the viewing booking ---
     const selectedBookingContainers = useMemo(() => {
@@ -73,12 +66,11 @@ export default function Bookings() {
     }, [viewingBooking, containers, archivedContainers]);
 
     // --- Helper: Get Accurate Filled Count ---
-    // filledBookingCounts context might only track 'bookings', so we fallback to manual calc for archived ones
     const getFilledCount = (bookingId) => {
-        if (filledBookingCounts && typeof filledBookingCounts[bookingId] === 'number') {
+        if (activeTab === 'active' && filledBookingCounts && typeof filledBookingCounts[bookingId] === 'number') {
             return filledBookingCounts[bookingId];
         }
-        // Fallback calculation
+        // Fallback calculation (always used for archived tab)
         const liveCount = containers.filter(c => c.booking === bookingId).length;
         const archivedCount = archivedContainers.filter(c => c.booking === bookingId).length;
         return liveCount + archivedCount;
@@ -119,6 +111,27 @@ export default function Bookings() {
     const handleAddContainerClick = (bookingId, e) => {
         e.stopPropagation();
         openModal(null); 
+    };
+
+    // --- NEW: Handle Manual Archive ---
+    const handleArchiveClick = async (booking, e) => {
+        e.stopPropagation();
+        if (!window.confirm(`Are you sure you want to archive Booking ${booking.id}? This will remove it from the Active list.`)) return;
+        
+        setIsSaving(true);
+        try {
+            await archiveBooking({ 
+                bookingsPath, 
+                archivedBookingsPath, 
+                booking 
+            });
+            addToast(`Booking ${booking.id} archived successfully.`, 'success');
+        } catch (error) {
+            console.error("Error archiving booking:", error);
+            addToast("Failed to archive booking.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleChange = (e) => {
@@ -170,24 +183,41 @@ export default function Bookings() {
 
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg min-h-[50vh]">
-            <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
-                <div className="flex items-center gap-4">
-                    {viewingBooking && (
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 border-b border-gray-700 pb-4 gap-4">
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                    {viewingBooking ? (
                         <button 
                             onClick={handleBackToGrid}
                             className="text-gray-400 hover:text-white flex items-center gap-1 text-sm font-semibold"
                         >
                             ← Back
                         </button>
+                    ) : (
+                        // Tabs for Active/Archived
+                        <div className="flex bg-gray-700 rounded-lg p-1">
+                            <button
+                                onClick={() => setActiveTab('active')}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'active' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                Active Bookings
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('archived')}
+                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'archived' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                Archived
+                            </button>
+                        </div>
                     )}
-                    <h2 className="text-2xl font-bold text-white">
-                        {viewingBooking ? `Booking: ${viewingBooking.id}` : 'Booking Management'}
+                    <h2 className="text-2xl font-bold text-white hidden sm:block">
+                        {viewingBooking ? `Booking: ${viewingBooking.id}` : ''}
                     </h2>
                 </div>
-                {!isFormOpen && !viewingBooking && (
+                
+                {!isFormOpen && !viewingBooking && activeTab === 'active' && (
                     <button 
                         onClick={(e) => openForm(null, e)} 
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105"
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                     >
                         New Bookings
                     </button>
@@ -256,6 +286,14 @@ export default function Bookings() {
                             <span className="text-gray-400 block">Filled</span>
                             <span className="font-bold text-lg text-white">{getFilledCount(viewingBooking.id)}</span>
                         </div>
+                        {viewingBooking.archivedAt && (
+                            <div>
+                                <span className="text-gray-400 block">Archived Date</span>
+                                <span className="font-bold text-lg text-yellow-500">
+                                    {new Date(viewingBooking.archivedAt.seconds * 1000).toLocaleDateString()}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <h3 className="text-lg font-semibold mb-4 text-gray-300">Associated Containers ({selectedBookingContainers.length})</h3>
@@ -331,20 +369,34 @@ export default function Bookings() {
                                         </span>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button 
-                                            onClick={(e) => openForm(booking, e)} 
-                                            className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10"
-                                            title="Edit Booking"
-                                        >
-                                            <PencilIcon />
-                                        </button>
-                                        {!isFull && (
+                                        {activeTab === 'active' && (
+                                            <button 
+                                                onClick={(e) => openForm(booking, e)} 
+                                                className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10"
+                                                title="Edit Booking"
+                                            >
+                                                <PencilIcon />
+                                            </button>
+                                        )}
+                                        
+                                        {activeTab === 'active' && !isFull && (
                                             <button 
                                                 onClick={(e) => handleAddContainerClick(booking.id, e)}
                                                 className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-600 rounded-full transition-colors z-10"
                                                 title="Add Container"
                                             >
                                                 <PlusCircleIcon />
+                                            </button>
+                                        )}
+
+                                        {/* Show Archive Button ONLY when Full and Active */}
+                                        {activeTab === 'active' && isFull && (
+                                            <button
+                                                onClick={(e) => handleArchiveClick(booking, e)}
+                                                className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-gray-600 rounded-full transition-colors z-10"
+                                                title="Archive Full Booking"
+                                            >
+                                                <ArchiveIcon />
                                             </button>
                                         )}
                                     </div>
@@ -361,8 +413,8 @@ export default function Bookings() {
                                             style={{ width: `${progress}%` }}
                                         ></div>
                                     </div>
-                                    {isFull && containers.some(c => c.booking === booking.id) && (
-                                        <p className="text-xs text-yellow-500 mt-1">⚠️ Full but has active containers in yard</p>
+                                    {isFull && containers.some(c => c.booking === booking.id) && activeTab === 'active' && (
+                                        <p className="text-xs text-yellow-500 mt-1">⚠️ Full but has active containers</p>
                                     )}
                                 </div>
                             </div>
@@ -371,13 +423,15 @@ export default function Bookings() {
                     
                     {visibleBookings.length === 0 && (
                         <div className="col-span-full text-center py-16 bg-gray-700/50 rounded-xl border-2 border-dashed border-gray-600 text-gray-400">
-                            <p className="text-lg mb-2">No active bookings found.</p>
-                            <button 
-                                onClick={() => openForm(null)}
-                                className="text-blue-400 hover:text-blue-300 underline"
-                            >
-                                Create a new booking
-                            </button>
+                            <p className="text-lg mb-2">No {activeTab} bookings found.</p>
+                            {activeTab === 'active' && (
+                                <button 
+                                    onClick={() => openForm(null)}
+                                    className="text-blue-400 hover:text-blue-300 underline"
+                                >
+                                    Create a new booking
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

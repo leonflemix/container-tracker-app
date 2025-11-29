@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { calculateDaysBetween } from '../utils/dates';
 
-// Create a new container (with event) and optionally archive booking when full
+// Create a new container (with event)
 export async function createContainerWithBooking({
     containersPath,
     eventsPath,
@@ -62,14 +62,9 @@ export async function createContainerWithBooking({
     batch.set(containerRef, dataToSave);
     batch.set(doc(collection(db, eventsPath)), eventData);
 
-    const currentFilledCount = filledBookingCounts[selectedBooking.id] || 0;
-    if (currentFilledCount + 1 >= selectedBooking.quantity) {
-        const bookingToArchiveRef = doc(db, bookingsPath, selectedBooking.id);
-        const archivedBookingRef = doc(db, archivedBookingsPath, selectedBooking.id);
-        const archivedBookingData = { ...selectedBooking, archivedAt: Timestamp.now() };
-        batch.set(archivedBookingRef, archivedBookingData);
-        batch.delete(bookingToArchiveRef);
-    }
+    // --- REMOVED AUTO-ARCHIVING LOGIC HERE ---
+    // Bookings now stay in the active list even when full, 
+    // until manually archived via the Bookings page.
 
     await batch.commit();
     return { success: true };
@@ -383,4 +378,19 @@ export async function markContainerAsRepaired({ containersPath, eventsPath, cont
     batch.set(doc(collection(db, eventsPath)), eventData);
     await batch.commit();
     return { repaired: true };
+}
+
+// --- NEW: Manual Archive for Bookings ---
+export async function archiveBooking({ bookingsPath, archivedBookingsPath, booking }) {
+    const bookingToArchiveRef = doc(db, bookingsPath, booking.id);
+    const archivedBookingRef = doc(db, archivedBookingsPath, booking.id);
+    
+    const archivedBookingData = { ...booking, archivedAt: Timestamp.now() };
+    
+    const batch = writeBatch(db);
+    batch.set(archivedBookingRef, archivedBookingData);
+    batch.delete(bookingToArchiveRef);
+    
+    await batch.commit();
+    return { archived: true };
 }
