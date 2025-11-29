@@ -12,8 +12,7 @@ import { CONTAINER_STATUSES } from '../constants';
 export default function Bookings() {
     // --- Get data from context ---
     const {
-        openBookings,
-        bookings, // Get all bookings if needed, or just open ones
+        bookings, // Get all bookings
         filledBookingCounts,
         paths,
         collections: collectionsData,
@@ -31,13 +30,28 @@ export default function Bookings() {
     // --- Local State ---
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingBooking, setEditingBooking] = useState(null);
-    const [viewingBooking, setViewingBooking] = useState(null); // New: Track selected booking for drill-down
+    const [viewingBooking, setViewingBooking] = useState(null); // Track selected booking for drill-down
     const [formData, setFormData] = useState({
         id: '',
         quantity: 1,
         type: '',
     });
     const [isSaving, setIsSaving] = useState(false);
+
+    // --- Derived Data: Filter bookings to show ---
+    // Show booking if:
+    // 1. It is not full (open)
+    // 2. OR it has active containers (live in yard/processing) even if full
+    const visibleBookings = useMemo(() => {
+        if (!bookings) return [];
+        return bookings.filter(booking => {
+            const filledCount = filledBookingCounts[booking.id] || 0;
+            const isOpen = filledCount < booking.quantity;
+            // Check if there are any active (non-archived) containers for this booking
+            const hasActiveContainers = containers.some(c => c.booking === booking.id);
+            return isOpen || hasActiveContainers;
+        });
+    }, [bookings, filledBookingCounts, containers]);
 
     // --- Derived Data: Containers for the viewing booking ---
     const selectedBookingContainers = useMemo(() => {
@@ -86,10 +100,6 @@ export default function Bookings() {
 
     const handleAddContainerClick = (bookingId, e) => {
         e.stopPropagation();
-        // We can't easily pre-select in the main modal from here without extra logic in App.js,
-        // but we can open the modal. For now, let's just open the modal.
-        // If you need the pre-select logic, we'd need to lift that state up or pass the handler from App.js.
-        // Assuming user wants to view details mostly here.
         openModal(null); 
     };
 
@@ -282,11 +292,12 @@ export default function Bookings() {
                     )}
                 </div>
             ) : (
-                // --- GRID VIEW (OPEN BOOKINGS) ---
+                // --- GRID VIEW (VISIBLE BOOKINGS) ---
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {(openBookings || []).map(booking => {
+                    {visibleBookings.map(booking => {
                         const filled = (filledBookingCounts || {})[booking.id] || 0;
                         const progress = Math.min((filled / booking.quantity) * 100, 100);
+                        const isFull = filled >= booking.quantity;
                         
                         return (
                             <div 
@@ -309,13 +320,15 @@ export default function Bookings() {
                                         >
                                             <PencilIcon />
                                         </button>
-                                        <button 
-                                            onClick={(e) => handleAddContainerClick(booking.id, e)}
-                                            className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-600 rounded-full transition-colors z-10"
-                                            title="Add Container"
-                                        >
-                                            <PlusCircleIcon />
-                                        </button>
+                                        {!isFull && (
+                                            <button 
+                                                onClick={(e) => handleAddContainerClick(booking.id, e)}
+                                                className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-600 rounded-full transition-colors z-10"
+                                                title="Add Container"
+                                            >
+                                                <PlusCircleIcon />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                                 
@@ -335,14 +348,14 @@ export default function Bookings() {
                         );
                     })}
                     
-                    {(!openBookings || openBookings.length === 0) && (
+                    {visibleBookings.length === 0 && (
                         <div className="col-span-full text-center py-16 bg-gray-700/50 rounded-xl border-2 border-dashed border-gray-600 text-gray-400">
-                            <p className="text-lg mb-2">No open bookings found.</p>
+                            <p className="text-lg mb-2">No active bookings found.</p>
                             <button 
                                 onClick={() => openForm(null)}
                                 className="text-blue-400 hover:text-blue-300 underline"
                             >
-                                Create your first booking
+                                Create a new booking
                             </button>
                         </div>
                     )}
