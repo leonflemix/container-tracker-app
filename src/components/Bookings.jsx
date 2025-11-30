@@ -64,6 +64,14 @@ export default function Bookings() {
             return dateB - dateA;
         });
     }, [viewingBooking, containers, archivedContainers]);
+    
+    const bookingContainersForAssign = useMemo(() => {
+        if (!assignDriverState.booking) return [];
+        // Combine live and archived containers for this booking
+        const live = containers.filter(c => c.booking === assignDriverState.booking.id);
+        const archived = archivedContainers.filter(c => c.booking === assignDriverState.booking.id);
+        return [...live, ...archived];
+    }, [assignDriverState.booking, containers, archivedContainers]);
 
     const getFilledCount = (bookingId) => {
         if (activeTab === 'active' && filledBookingCounts && typeof filledBookingCounts[bookingId] === 'number') {
@@ -379,11 +387,13 @@ export default function Bookings() {
                     )}
                 </div>
             )}
+            
 
             {assignDriverState.isOpen && (
                 <AssignBookingDriverModal 
                     booking={assignDriverState.booking}
                     drivers={drivers}
+                    containers={bookingContainersForAssign}
                     selectedDriver={selectedDriverForBooking}
                     setSelectedDriver={setSelectedDriverForBooking}
                     onConfirm={handleAssignDriverSubmit}
