@@ -2,18 +2,24 @@
 // Location: src/components
 
 import React, { useState } from 'react';
+import { assignDriverToContainer } from '../services/containerService'; // Import individual assign service
+import { useAppContext } from '../context/AppContext'; // Need context to get paths
 
 export default function AssignBookingDriverModal({
     booking,
     drivers = [],
-    containers = [], // New prop for associated containers
+    containers = [], 
     selectedDriver,
     setSelectedDriver,
     onConfirm,
     onClose,
     isSaving
 }) {
+    const { paths, addToast } = useAppContext(); // Get context for paths/toast
+    const { containersPath, eventsPath } = paths;
+
     const [isContainerListOpen, setIsContainerListOpen] = useState(false);
+    const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
 
     // Group containers by status for display
     const groupedContainers = containers.reduce((acc, container) => {
@@ -23,11 +29,37 @@ export default function AssignBookingDriverModal({
         return acc;
     }, {});
 
+    // Handler for individual container assignment
+    const handleAssignContainer = async (container, e) => {
+        e.stopPropagation();
+        if (!selectedDriver) {
+            addToast("Please select a driver first.", "error");
+            return;
+        }
+        
+        setAssigningContainerId(container.id);
+        try {
+            await assignDriverToContainer({
+                containersPath,
+                eventsPath,
+                containerId: container.id,
+                selectedDriver,
+                containerData: container
+            });
+            addToast(`Container ${container.id} assigned to ${selectedDriver}`, "success");
+        } catch (error) {
+            console.error("Error assigning container:", error);
+            addToast("Failed to assign container.", "error");
+        } finally {
+            setAssigningContainerId(null);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <header className="flex justify-between items-center p-4 border-b border-gray-700 shrink-0">
-                    <h3 className="text-lg font-bold text-white">Assign Driver to Booking</h3>
+                    <h3 className="text-lg font-bold text-white">Assign Driver</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
                 
@@ -77,13 +109,26 @@ export default function AssignBookingDriverModal({
                                             </h4>
                                             <ul className="space-y-1">
                                                 {items.map(c => (
-                                                    <li key={c.id} className="text-gray-300 pl-2 flex justify-between">
-                                                        <span>{c.id}</span>
-                                                        {c.deliveryDriver && (
-                                                            <span className="text-indigo-400" title="Already has driver">
-                                                                🚚 {c.deliveryDriver}
-                                                            </span>
-                                                        )}
+                                                    <li key={c.id} className="text-gray-300 pl-2 flex justify-between items-center py-1 border-b border-gray-800 last:border-0">
+                                                        <span className="font-mono">{c.id}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            {c.deliveryDriver ? (
+                                                                <span className="text-indigo-400 truncate max-w-[80px]" title={`Current: ${c.deliveryDriver}`}>
+                                                                    🚚 {c.deliveryDriver}
+                                                                </span>
+                                                            ) : (
+                                                                selectedDriver && (
+                                                                    <button
+                                                                        onClick={(e) => handleAssignContainer(c, e)}
+                                                                        disabled={assigningContainerId === c.id}
+                                                                        className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] disabled:opacity-50"
+                                                                        title={`Assign ${selectedDriver} to this container`}
+                                                                    >
+                                                                        {assigningContainerId === c.id ? '...' : 'Assign'}
+                                                                    </button>
+                                                                )
+                                                            )}
+                                                        </div>
                                                     </li>
                                                 ))}
                                             </ul>
@@ -96,21 +141,26 @@ export default function AssignBookingDriverModal({
                         )}
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-2">
-                        <button 
-                            type="button" 
-                            onClick={onClose} 
-                            className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg text-white"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            onClick={onConfirm} 
-                            disabled={isSaving} 
-                            className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800"
-                        >
-                            {isSaving ? 'Saving...' : 'Assign'}
-                        </button>
+                    <div className="flex justify-between gap-3 pt-2 items-center">
+                        <span className="text-xs text-gray-500 italic">
+                            * 'Assign All' sets driver for booking & active containers.
+                        </span>
+                        <div className="flex gap-2">
+                            <button 
+                                type="button" 
+                                onClick={onClose} 
+                                className="py-2 px-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={onConfirm} 
+                                disabled={isSaving} 
+                                className="py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800 text-sm font-bold"
+                            >
+                                {isSaving ? 'Saving...' : 'Assign All'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
