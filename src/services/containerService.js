@@ -10,7 +10,8 @@ import {
     where,
     getDocs,
     getDoc,
-    writeBatch
+    writeBatch,
+    setDoc // Ensure setDoc is imported
 } from 'firebase/firestore';
 import { calculateDaysBetween } from '../utils/dates';
 
@@ -383,4 +384,11 @@ export async function unarchiveBooking({ bookingsPath, archivedBookingsPath, boo
     
     await batch.commit();
     return { unarchived: true };
+}
+
+// --- NEW: Assign Driver to Booking ---
+export async function assignDriverToBooking({ bookingPath, bookingId, driverName }) {
+    const bookingRef = doc(db, bookingPath, bookingId);
+    await setDoc(bookingRef, { assignedDriver: driverName }, { merge: true });
+    return { success: true };
 }
