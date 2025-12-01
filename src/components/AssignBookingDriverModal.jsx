@@ -11,14 +11,13 @@ export default function AssignBookingDriverModal({
     containers = [], 
     selectedDriver,
     setSelectedDriver,
-    onConfirm,
     onClose,
     isSaving
 }) {
     const { paths, addToast } = useAppContext(); // Get context for paths/toast
     const { containersPath, eventsPath } = paths;
 
-    const [isContainerListOpen, setIsContainerListOpen] = useState(false);
+    const [isContainerListOpen, setIsContainerListOpen] = useState(true); // Default open to see containers
     const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
     const [scheduledReturn, setScheduledReturn] = useState('');
 
@@ -117,7 +116,7 @@ export default function AssignBookingDriverModal({
                         </button>
                         
                         {isContainerListOpen && (
-                            <div className="bg-gray-900 p-2 text-xs max-h-48 overflow-y-auto">
+                            <div className="bg-gray-900 p-2 text-xs max-h-64 overflow-y-auto">
                                 {Object.keys(groupedContainers).length > 0 ? (
                                     Object.entries(groupedContainers).map(([status, items]) => (
                                         <div key={status} className="mb-2 last:mb-0">
@@ -160,26 +159,14 @@ export default function AssignBookingDriverModal({
                         )}
                     </div>
 
-                    <div className="flex justify-between gap-3 pt-2 items-center">
-                        <span className="text-xs text-gray-500 italic">
-                            * 'Assign All' sets driver for booking & active containers.
-                        </span>
-                        <div className="flex gap-2">
-                            <button 
-                                type="button" 
-                                onClick={onClose} 
-                                className="py-2 px-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={() => onConfirm(scheduledReturn)} 
-                                disabled={isSaving} 
-                                className="py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800 text-sm font-bold"
-                            >
-                                {isSaving ? 'Saving...' : 'Assign All'}
-                            </button>
-                        </div>
+                    <div className="flex justify-end pt-2">
+                        <button 
+                            type="button" 
+                            onClick={onClose} 
+                            className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm"
+                        >
+                            Close
+                        </button>
                     </div>
                 </div>
             </div>
