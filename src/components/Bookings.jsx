@@ -9,7 +9,7 @@ import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon, UndoIcon } from '..
 import { useAppContext } from '../context/AppContext';
 import { CONTAINER_STATUSES } from '../constants';
 import { archiveBooking, unarchiveBooking, assignDriverToBooking } from '../services/containerService';
-import AssignBookingDriverModal from './AssignBookingDriverModal'; // Import new modal
+import AssignBookingDriverModal from './AssignBookingDriverModal';
 
 export default function Bookings() {
     // --- Get data from context ---
@@ -64,10 +64,10 @@ export default function Bookings() {
             return dateB - dateA;
         });
     }, [viewingBooking, containers, archivedContainers]);
-    
+
+    // Calculate containers for assignment modal
     const bookingContainersForAssign = useMemo(() => {
         if (!assignDriverState.booking) return [];
-        // Combine live and archived containers for this booking
         const live = containers.filter(c => c.booking === assignDriverState.booking.id);
         const archived = archivedContainers.filter(c => c.booking === assignDriverState.booking.id);
         return [...live, ...archived];
@@ -339,11 +339,25 @@ export default function Bookings() {
                         const progress = Math.min((filled / booking.quantity) * 100, 100);
                         const isFull = filled >= booking.quantity;
                         
+                        // Check if any containers are "Ready for Delivery"
+                        const hasReadyContainers = containers.some(c => 
+                            c.booking === booking.id && c.status === 'ALL GOOD, BOOK FOR DELIVERY'
+                        );
+                        
                         return (
                             <div key={booking.id} onClick={() => handleBookingClick(booking)} className="bg-gray-700 p-5 rounded-lg shadow-md hover:bg-gray-650 cursor-pointer transition-all duration-200 group relative border border-gray-600 hover:border-blue-500">
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
-                                        <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{booking.id}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{booking.id}</h3>
+                                            {/* Thumbs Up Indicator */}
+                                            <span 
+                                                className={`text-lg transition-colors ${hasReadyContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`}
+                                                title={hasReadyContainers ? "Has containers ready for delivery" : "No containers ready"}
+                                            >
+                                                👍🏻
+                                            </span>
+                                        </div>
                                         <div className="flex flex-col gap-1 mt-1">
                                             <span className="inline-block text-xs font-semibold bg-gray-600 text-blue-200 px-2 py-0.5 rounded border border-gray-500 w-fit">{booking.type}</span>
                                             {booking.assignedDriver && <span className="inline-block text-xs font-semibold bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700 w-fit flex items-center"><TruckIcon /> {booking.assignedDriver}</span>}
@@ -352,7 +366,6 @@ export default function Bookings() {
                                     <div className="flex gap-1 flex-wrap justify-end max-w-[50%]">
                                         <button onClick={(e) => openForm(booking, e)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10" title="Edit Booking"><PencilIcon /></button>
                                         
-                                        {/* Assign Driver Button */}
                                         <button onClick={(e) => handleOpenAssignDriver(booking, e)} className="p-2 text-gray-400 hover:text-indigo-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Assign Driver"><TruckIcon /></button>
 
                                         {activeTab === 'active' && !isFull && (
@@ -387,13 +400,12 @@ export default function Bookings() {
                     )}
                 </div>
             )}
-            
 
             {assignDriverState.isOpen && (
                 <AssignBookingDriverModal 
                     booking={assignDriverState.booking}
                     drivers={drivers}
-                    containers={bookingContainersForAssign}
+                    containers={bookingContainersForAssign} // Pass correct container list
                     selectedDriver={selectedDriverForBooking}
                     setSelectedDriver={setSelectedDriverForBooking}
                     onConfirm={handleAssignDriverSubmit}
