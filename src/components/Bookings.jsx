@@ -39,6 +39,7 @@ export default function Bookings() {
         id: '',
         quantity: 1,
         type: '',
+        deadline: '', // NEW: Deadline field
     });
     const [isSaving, setIsSaving] = useState(false);
 
@@ -91,9 +92,11 @@ export default function Bookings() {
                 id: booking.id,
                 quantity: booking.quantity,
                 type: booking.type,
+                // Convert Timestamp to date string
+                deadline: booking.deadline ? new Date(booking.deadline.seconds * 1000).toISOString().split('T')[0] : '',
             });
         } else {
-            setFormData({ id: '', quantity: 1, type: '' });
+            setFormData({ id: '', quantity: 1, type: '', deadline: '' });
         }
         setIsFormOpen(true);
         setViewingBooking(null);
@@ -102,7 +105,7 @@ export default function Bookings() {
     const closeForm = () => {
         setIsFormOpen(false);
         setEditingBooking(null);
-        setFormData({ id: '', quantity: 1, type: '' });
+        setFormData({ id: '', quantity: 1, type: '', deadline: '' });
     };
 
     const handleBookingClick = (booking) => {
@@ -209,6 +212,8 @@ export default function Bookings() {
             id: bookingId,
             quantity: formData.quantity,
             type: formData.type,
+            // Convert string date back to Timestamp
+            deadline: formData.deadline ? Timestamp.fromDate(new Date(formData.deadline)) : null,
         };
 
         if (!editingBooking) {
@@ -280,7 +285,11 @@ export default function Bookings() {
                     <h3 className="text-xl font-bold mb-4">{editingBooking ? 'Edit Booking' : 'Create New Booking'}</h3>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <InputField label="Booking #" name="id" value={formData.id} onChange={handleChange} required disabled={!!editingBooking} />
-                        <InputField label="Quantity" name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
+                        <div className="grid grid-cols-2 gap-4">
+                            <InputField label="Quantity" name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
+                            {/* NEW DEADLINE FIELD */}
+                            <InputField label="Deadline" name="deadline" type="date" value={formData.deadline} onChange={handleChange} />
+                        </div>
                         <div>
                             <label htmlFor="type" className="block text-sm font-medium text-gray-300 mb-1">Type *</label>
                             <select id="type" name="type" value={formData.type} onChange={handleChange} required className="w-full p-2 bg-gray-600 text-white rounded-md border border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -303,6 +312,9 @@ export default function Bookings() {
                          <div><span className="text-gray-400 block">Type</span><span className="font-bold text-lg text-white">{viewingBooking.type}</span></div>
                          <div><span className="text-gray-400 block">Quantity</span><span className="font-bold text-lg text-white">{viewingBooking.quantity}</span></div>
                          <div><span className="text-gray-400 block">Filled</span><span className="font-bold text-lg text-white">{getFilledCount(viewingBooking.id)}</span></div>
+                         {viewingBooking.deadline && (
+                             <div><span className="text-gray-400 block">Deadline</span><span className="font-bold text-lg text-red-400">{new Date(viewingBooking.deadline.seconds * 1000).toLocaleDateString()}</span></div>
+                         )}
                          {viewingBooking.assignedDriver && <div><span className="text-gray-400 block">Assigned Driver</span><span className="font-bold text-lg text-blue-300">{viewingBooking.assignedDriver}</span></div>}
                          {viewingBooking.archivedAt && <div><span className="text-gray-400 block">Archived Date</span><span className="font-bold text-lg text-yellow-500">{new Date(viewingBooking.archivedAt.seconds * 1000).toLocaleDateString()}</span></div>}
                     </div>
@@ -360,6 +372,12 @@ export default function Bookings() {
                                         </div>
                                         <div className="flex flex-col gap-1 mt-1">
                                             <span className="inline-block text-xs font-semibold bg-gray-600 text-blue-200 px-2 py-0.5 rounded border border-gray-500 w-fit">{booking.type}</span>
+                                            {/* Display Deadline */}
+                                            {booking.deadline && (
+                                                <span className="inline-block text-xs font-semibold bg-red-900/50 text-red-200 px-2 py-0.5 rounded border border-red-800 w-fit">
+                                                    Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}
+                                                </span>
+                                            )}
                                             {booking.assignedDriver && <span className="inline-block text-xs font-semibold bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700 w-fit flex items-center"><TruckIcon /> {booking.assignedDriver}</span>}
                                         </div>
                                     </div>
@@ -408,7 +426,6 @@ export default function Bookings() {
                     containers={bookingContainersForAssign} // Pass correct container list
                     selectedDriver={selectedDriverForBooking}
                     setSelectedDriver={setSelectedDriverForBooking}
-                    onConfirm={handleAssignDriverSubmit}
                     onClose={() => setAssignDriverState({ isOpen: false, booking: null })}
                     isSaving={isSaving}
                 />

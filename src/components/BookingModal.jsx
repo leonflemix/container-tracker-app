@@ -28,6 +28,7 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
         id: '',
         quantity: 1,
         type: '',
+        deadline: '', // NEW: Deadline field
     });
     const [isSaving, setIsSaving] = useState(false);
 
@@ -38,9 +39,11 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
                 id: booking.id,
                 quantity: booking.quantity,
                 type: booking.type,
+                // Convert Timestamp to YYYY-MM-DD for date input
+                deadline: booking.deadline ? new Date(booking.deadline.seconds * 1000).toISOString().split('T')[0] : '',
             });
         } else {
-            setFormData({ id: '', quantity: 1, type: '' });
+            setFormData({ id: '', quantity: 1, type: '', deadline: '' });
         }
         setIsFormOpen(true);
     };
@@ -48,7 +51,7 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
     const closeForm = () => {
         setIsFormOpen(false);
         setEditingBooking(null);
-        setFormData({ id: '', quantity: 1, type: '' });
+        setFormData({ id: '', quantity: 1, type: '', deadline: '' });
     };
 
     const handleChange = (e) => {
@@ -73,6 +76,8 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
             id: bookingId,
             quantity: formData.quantity,
             type: formData.type,
+            // Save deadline as Timestamp if it exists
+            deadline: formData.deadline ? Timestamp.fromDate(new Date(formData.deadline)) : null,
         };
 
         // Only add createdAt for new bookings
@@ -120,7 +125,10 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
                     {isFormOpen ? (
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <InputField label="Booking #" name="id" value={formData.id} onChange={handleChange} required disabled={!!editingBooking} />
-                            <InputField label="Quantity" name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputField label="Quantity" name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
+                                <InputField label="Deadline" name="deadline" type="date" value={formData.deadline} onChange={handleChange} />
+                            </div>
                             <div>
                                 <label htmlFor="type" className="block text-sm font-medium text-gray-300 mb-1">Type *</label>
                                 <select
@@ -154,7 +162,14 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
                                     <div key={booking.id} className="bg-gray-700 p-3 rounded-md flex justify-between items-center">
                                         <div>
                                             <p className="font-bold text-white">{booking.id}</p>
-                                            <p className="text-sm text-gray-400">{booking.type}</p>
+                                            <div className="flex flex-col">
+                                                <p className="text-sm text-gray-400">{booking.type}</p>
+                                                {booking.deadline && (
+                                                    <p className="text-xs text-red-300">
+                                                        Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <div className="text-right">
@@ -185,4 +200,3 @@ export default function BookingModal({ onClose, onSelectBookingForContainerAdd }
         </div>
     );
 }
-
