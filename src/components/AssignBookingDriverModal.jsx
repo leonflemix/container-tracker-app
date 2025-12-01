@@ -20,6 +20,7 @@ export default function AssignBookingDriverModal({
 
     const [isContainerListOpen, setIsContainerListOpen] = useState(false);
     const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
+    const [scheduledReturn, setScheduledReturn] = useState('');
 
     // Filter containers: If a driver is selected, exclude containers already assigned to that driver
     const displayedContainers = containers.filter(container => 
@@ -49,7 +50,8 @@ export default function AssignBookingDriverModal({
                 eventsPath,
                 containerId: container.id,
                 selectedDriver,
-                containerData: container
+                containerData: container,
+                scheduledReturn // Pass the selected return date
             });
             addToast(`Container ${container.id} assigned to ${selectedDriver}`, "success");
         } catch (error) {
@@ -91,6 +93,16 @@ export default function AssignBookingDriverModal({
                                 <option key={d.docId} value={d.name}>{d.name} {d.plate ? `- ${d.plate}` : ''}</option>
                             ))}
                         </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Scheduled Return (Optional)</label>
+                        <input 
+                            type="datetime-local" 
+                            value={scheduledReturn}
+                            onChange={(e) => setScheduledReturn(e.target.value)}
+                            className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                     </div>
 
                     {/* Container Status List Dropdown */}
@@ -161,7 +173,7 @@ export default function AssignBookingDriverModal({
                                 Cancel
                             </button>
                             <button 
-                                onClick={onConfirm} 
+                                onClick={() => onConfirm(scheduledReturn)} 
                                 disabled={isSaving} 
                                 className="py-2 px-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800 text-sm font-bold"
                             >
