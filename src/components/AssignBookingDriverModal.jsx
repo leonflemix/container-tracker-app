@@ -21,8 +21,13 @@ export default function AssignBookingDriverModal({
     const [isContainerListOpen, setIsContainerListOpen] = useState(false);
     const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
 
+    // Filter containers: If a driver is selected, exclude containers already assigned to that driver
+    const displayedContainers = containers.filter(container => 
+        !selectedDriver || container.deliveryDriver !== selectedDriver
+    );
+
     // Group containers by status for display
-    const groupedContainers = containers.reduce((acc, container) => {
+    const groupedContainers = displayedContainers.reduce((acc, container) => {
         const status = container.status || 'Unknown';
         if (!acc[status]) acc[status] = [];
         acc[status].push(container);
@@ -95,7 +100,7 @@ export default function AssignBookingDriverModal({
                             onClick={() => setIsContainerListOpen(!isContainerListOpen)}
                             className="w-full p-2 bg-gray-700 text-left text-sm text-gray-300 flex justify-between items-center hover:bg-gray-600 transition-colors"
                         >
-                            <span className="font-semibold">Review Containers ({containers.length})</span>
+                            <span className="font-semibold">Review Containers ({displayedContainers.length})</span>
                             <span className="text-xs">{isContainerListOpen ? '▲' : '▼'}</span>
                         </button>
                         
@@ -135,7 +140,9 @@ export default function AssignBookingDriverModal({
                                         </div>
                                     ))
                                 ) : (
-                                    <p className="text-gray-500 text-center py-2">No containers found for this booking.</p>
+                                    <p className="text-gray-500 text-center py-2">
+                                        {selectedDriver ? `All containers are already assigned to ${selectedDriver}.` : "No containers found."}
+                                    </p>
                                 )}
                             </div>
                         )}
