@@ -1,9 +1,9 @@
 // File: src/components/Bookings.jsx
 // Location: src/components
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react'; // Added useEffect
 import { db, Timestamp } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, onSnapshot } from 'firebase/firestore'; // Added imports
 import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon, UndoIcon } from '../icons';
 import { useAppContext } from '../context/AppContext';
@@ -11,6 +11,11 @@ import { CONTAINER_STATUSES } from '../constants';
 import { archiveBooking, unarchiveBooking, assignDriverToBooking, createCollectionAssignment } from '../services/containerService';
 import AssignBookingDriverModal from './AssignBookingDriverModal';
 import CreateCollectionModal from './CreateCollectionModal';
+
+// Simple Down Arrow Icon for "Collect"
+const DownloadIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+);
 
 export default function Bookings() {
     // --- Get data from context ---
@@ -46,6 +51,7 @@ export default function Bookings() {
         deadline: '',
     });
     const [isSaving, setIsSaving] = useState(false);
+    const [pickups, setPickups] = useState([]); // State for pickups
 
     // --- State for Modals ---
     const [assignDriverState, setAssignDriverState] = useState({ isOpen: false, booking: null });
@@ -53,6 +59,23 @@ export default function Bookings() {
     
     // --- State for Collection Modal ---
     const [collectionModal, setCollectionModal] = useState({ isOpen: false, booking: null });
+
+    // --- Data Fetching for Pickups ---
+    useEffect(() => {
+        if (!pickupsPath) return;
+        const q = query(collection(db, pickupsPath));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const pickupsData = snapshot.docs.map(doc => ({ 
+                id: doc.id, 
+                ...doc.data(),
+                scheduledDate: doc.data().scheduledDate?.toDate ? doc.data().scheduledDate.toDate() : null
+            }));
+            setPickups(pickupsData);
+        }, (error) => {
+            console.error("Error fetching pickups:", error);
+        });
+        return () => unsubscribe();
+    }, [pickupsPath]);
 
     // --- Derived Data ---
     const visibleBookings = useMemo(() => {
@@ -381,9 +404,13 @@ export default function Bookings() {
                         const progress = Math.min((filled / booking.quantity) * 100, 100);
                         const isFull = filled >= booking.quantity;
                         
+                        // Check if any containers are "Ready for Delivery"
                         const hasAssignableContainers = containers.some(c => 
                             c.booking === booking.id && ASSIGNABLE_STATUSES.includes(c.status)
                         );
+
+                        // Find pickups for this booking
+                        const bookingPickups = pickups.filter(p => p.bookingId === booking.id);
                         
                         return (
                             <div key={booking.id} onClick={() => handleBookingClick(booking)} className="bg-gray-700 p-5 rounded-lg shadow-md hover:bg-gray-650 cursor-pointer transition-all duration-200 group relative border border-gray-600 hover:border-blue-500">
@@ -391,12 +418,35 @@ export default function Bookings() {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{booking.id}</h3>
-                                            <span className={`text-lg transition-colors ${hasAssignableContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`} title={hasAssignableContainers ? "Has containers assignable for delivery" : "No assignable containers"}>👍🏻</span>
+                                            <span 
+                                                className={`text-lg transition-colors ${hasAssignableContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`}
+                                                title={hasAssignableContainers ? "Has containers assignable for delivery" : "No assignable containers"}
+                                            >
+                                                👍🏻
+                                            </span>
                                         </div>
                                         <div className="flex flex-col gap-1 mt-1">
                                             <span className="inline-block text-xs font-semibold bg-gray-600 text-blue-200 px-2 py-0.5 rounded border border-gray-500 w-fit">{booking.type}</span>
-                                            {booking.deadline && <span className="inline-block text-xs font-semibold bg-red-900/50 text-red-200 px-2 py-0.5 rounded border border-red-800 w-fit">Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}</span>}
+                                            {/* Display Deadline */}
+                                            {booking.deadline && (
+                                                <span className="inline-block text-xs font-semibold bg-red-900/50 text-red-200 px-2 py-0.5 rounded border border-red-800 w-fit">
+                                                    Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}
+                                                </span>
+                                            )}
                                             {booking.assignedDriver && <span className="inline-block text-xs font-semibold bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700 w-fit flex items-center"><TruckIcon /> {booking.assignedDriver}</span>}
+                                            
+                                            {/* Show Scheduled Collections */}
+                                            {bookingPickups.length > 0 && (
+                                                <div className="mt-1 space-y-1">
+                                                    {bookingPickups.map(p => (
+                                                        <span key={p.id} className="inline-block text-xs font-semibold bg-cyan-900/50 text-cyan-200 px-2 py-0.5 rounded border border-cyan-800 w-fit flex items-center gap-1">
+                                                            <span className="text-xs">🔄</span> 
+                                                            {p.driver}
+                                                            {p.scheduledDate && <span className="text-[10px] opacity-75 ml-1">({p.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex gap-1 flex-wrap justify-end max-w-[50%]">
