@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { TruckIcon, CalendarDaysIcon, PlusCircleIcon } from '../icons';
+import { deleteCollectionAssignment } from '../services/containerService'; // Import delete service
 
 // Simple Icons for this page
 const UserIcon = () => (
@@ -20,7 +21,8 @@ export default function DriverPage() {
         collections: collectionsData, 
         containers, 
         paths,
-        openModal 
+        openModal,
+        addToast // Get addToast from context
     } = useAppContext();
 
     const collections = collectionsData || {};
@@ -65,6 +67,22 @@ export default function DriverPage() {
         if (!selectedDriverName) return [];
         return pickups.filter(p => p.driver === selectedDriverName);
     }, [pickups, selectedDriverName]);
+
+    // --- Actions ---
+    const handleConfirmCollection = async (pickup) => {
+        if (window.confirm(`Start collection for Booking ${pickup.bookingId}? This will remove the scheduled task from your list and the bookings board.`)) {
+            try {
+                // Delete the pickup assignment as it's now being actioned
+                await deleteCollectionAssignment({ pickupsPath, pickupId: pickup.id });
+                addToast("Collection started. Please add the container details.", "success");
+                // Open modal to add the actual container
+                openModal(null);
+            } catch (error) {
+                console.error("Failed to update collection status", error);
+                addToast("Failed to update status", "error");
+            }
+        }
+    };
 
     // --- Login Screen ---
     if (!selectedDriverName) {
@@ -196,7 +214,7 @@ export default function DriverPage() {
                                     </div>
                                     
                                     <button 
-                                        onClick={() => openModal(null)} 
+                                        onClick={() => handleConfirmCollection(pickup)} 
                                         className="w-full mt-2 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-md"
                                     >
                                         <PlusCircleIcon />
