@@ -2,8 +2,10 @@
 // Location: src/components
 
 import React, { useState } from 'react';
-import { assignDriverToContainer } from '../services/containerService'; // Import individual assign service
-import { useAppContext } from '../context/AppContext'; // Need context to get paths
+import { db } from '../firebase'; // Added for direct updates
+import { doc, updateDoc, deleteField } from 'firebase/firestore'; // Added for direct updates
+import { assignDriverToContainer } from '../services/containerService'; 
+import { useAppContext } from '../context/AppContext'; 
 
 export default function AssignBookingDriverModal({
     booking,
@@ -12,20 +14,19 @@ export default function AssignBookingDriverModal({
     selectedDriver,
     setSelectedDriver,
     onClose,
-    onConfirm,
-    isSaving,
-    initialScheduledDate // New prop to pre-fill date
+    onConfirm, // Kept in props signature but not used for "Assign All" anymore
+    isSaving: parentIsSaving,
+    initialScheduledDate 
 }) {
-    const { paths, addToast } = useAppContext(); // Get context for paths/toast
+    const { paths, addToast } = useAppContext(); 
     const { containersPath, eventsPath } = paths;
 
-    const [isContainerListOpen, setIsContainerListOpen] = useState(true); // Default open to see containers
-    const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
+    const [isContainerListOpen, setIsContainerListOpen] = useState(true); 
+    const [processingContainerId, setProcessingContainerId] = useState(null); // Renamed for generic processing state
     
-    // Initialize date state based on prop (or default empty)
+    // Initialize date state
     const [returnDate, setReturnDate] = useState(() => {
         if (initialScheduledDate) {
-            // Handle Firestore Timestamp or Date object
             const d = initialScheduledDate.toDate ? initialScheduledDate.toDate() : new Date(initialScheduledDate);
             return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '';
         }
@@ -40,30 +41,30 @@ export default function AssignBookingDriverModal({
         return '08';
     });
 
-    // Generate hours 00-23
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 
-    // Helper to construct the final date object
     const getScheduledReturnDate = () => {
         if (!returnDate) return null;
         return new Date(`${returnDate}T${returnHour}:00:00`);
     };
 
     // --- FILTER LOGIC ---
-    // Only allow assignment for containers ready to leave the yard
     const ALLOWED_STATUSES = [
         'ALL GOOD, BOOK FOR DELIVERY',
         'NEED SQUISH',
         'CHASSIS NEEDS REPAIR'
     ];
 
-    // Filter containers: 
-    // 1. If a driver is selected, exclude containers already assigned to that driver
-    // 2. Only show containers present in the ALLOWED_STATUSES list
+    // Filter containers to show:
+    // 1. Containers ready to be assigned (in ALLOWED_STATUSES).
+    // 2. Containers ALREADY assigned to the selected driver (so they can be unassigned/edited).
     const displayedContainers = containers.filter(container => {
-        const notAssignedToCurrent = !selectedDriver || container.deliveryDriver !== selectedDriver;
-        const isAllowedStatus = ALLOWED_STATUSES.includes(container.status);
-        return notAssignedToCurrent && isAllowedStatus;
+        const isReady = ALLOWED_STATUSES.includes(container.status);
+        const isAssignedToCurrent = selectedDriver && container.deliveryDriver === selectedDriver;
+        // Show if it's ready OR if it's already mine (even if status changed to Assigned...)
+        // Note: Assigned containers usually have status starting with "Assigned...", so they fail isReady check.
+        // We explicitly check deliveryDriver match to include them.
+        return isReady || isAssignedToCurrent;
     });
 
     // Group containers by status for display
@@ -74,7 +75,7 @@ export default function AssignBookingDriverModal({
         return acc;
     }, {});
 
-    // Handler for individual container assignment
+    // ASSIGN Handler
     const handleAssignContainer = async (container, e) => {
         e.stopPropagation();
         if (!selectedDriver) {
@@ -82,7 +83,7 @@ export default function AssignBookingDriverModal({
             return;
         }
         
-        setAssigningContainerId(container.id);
+        setProcessingContainerId(container.id);
         const scheduledReturn = getScheduledReturnDate();
 
         try {
@@ -92,28 +93,47 @@ export default function AssignBookingDriverModal({
                 containerId: container.id,
                 selectedDriver,
                 containerData: container,
-                scheduledReturn // Pass the constructed date
+                scheduledReturn 
             });
             addToast(`Container ${container.id} assigned to ${selectedDriver}`, "success");
         } catch (error) {
             console.error("Error assigning container:", error);
             addToast("Failed to assign container.", "error");
         } finally {
-            setAssigningContainerId(null);
+            setProcessingContainerId(null);
         }
     };
 
-    // Handler for "Assign All" (Batch Assign)
-    const handleConfirm = () => {
-        const scheduledReturn = getScheduledReturnDate();
-        onConfirm(scheduledReturn); 
+    // UNASSIGN Handler (Delete/Undo)
+    const handleUnassignContainer = async (container, e) => {
+        e.stopPropagation();
+        if (!window.confirm(`Unassign ${container.deliveryDriver} from Container ${container.id}?`)) return;
+
+        setProcessingContainerId(container.id);
+        try {
+            const containerRef = doc(db, containersPath, container.id);
+            // Revert status to a safe default "Ready" state
+            // In a more complex app, we might store 'previousStatus' on the container, but here we default to Ready.
+            await updateDoc(containerRef, {
+                status: 'ALL GOOD, BOOK FOR DELIVERY',
+                deliveryDriver: deleteField(),
+                scheduledReturn: deleteField(),
+                lastUpdate: new Date()
+            });
+            addToast(`Container ${container.id} unassigned.`, "success");
+        } catch (error) {
+            console.error("Error unassigning container:", error);
+            addToast("Failed to unassign container.", "error");
+        } finally {
+            setProcessingContainerId(null);
+        }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <header className="flex justify-between items-center p-4 border-b border-gray-700 shrink-0">
-                    <h3 className="text-lg font-bold text-white">Assign Driver</h3>
+                    <h3 className="text-lg font-bold text-white">Manage Delivery</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
                 
@@ -173,7 +193,7 @@ export default function AssignBookingDriverModal({
                             onClick={() => setIsContainerListOpen(!isContainerListOpen)}
                             className="w-full p-2 bg-gray-700 text-left text-sm text-gray-300 flex justify-between items-center hover:bg-gray-600 transition-colors"
                         >
-                            <span className="font-semibold">Assignable Containers ({displayedContainers.length})</span>
+                            <span className="font-semibold">Containers ({displayedContainers.length})</span>
                             <span className="text-xs">{isContainerListOpen ? '▲' : '▼'}</span>
                         </button>
                         
@@ -191,18 +211,30 @@ export default function AssignBookingDriverModal({
                                                         <span className="font-mono">{c.id}</span>
                                                         <div className="flex items-center gap-2">
                                                             {c.deliveryDriver ? (
-                                                                <span className="text-indigo-400 truncate max-w-[80px]" title={`Current: ${c.deliveryDriver}`}>
-                                                                    🚚 {c.deliveryDriver}
-                                                                </span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-indigo-400 truncate max-w-[80px]" title={`Current: ${c.deliveryDriver}`}>
+                                                                        🚚 {c.deliveryDriver}
+                                                                    </span>
+                                                                    {c.deliveryDriver === selectedDriver && (
+                                                                        <button
+                                                                            onClick={(e) => handleUnassignContainer(c, e)}
+                                                                            disabled={processingContainerId === c.id}
+                                                                            className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] disabled:opacity-50"
+                                                                            title="Unassign / Delete"
+                                                                        >
+                                                                            {processingContainerId === c.id ? '...' : 'X'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             ) : (
                                                                 selectedDriver && (
                                                                     <button
                                                                         onClick={(e) => handleAssignContainer(c, e)}
-                                                                        disabled={assigningContainerId === c.id}
+                                                                        disabled={processingContainerId === c.id}
                                                                         className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] disabled:opacity-50"
                                                                         title={`Assign ${selectedDriver} to this container`}
                                                                     >
-                                                                        {assigningContainerId === c.id ? '...' : 'Assign'}
+                                                                        {processingContainerId === c.id ? '...' : 'Assign'}
                                                                     </button>
                                                                 )
                                                             )}
@@ -214,7 +246,7 @@ export default function AssignBookingDriverModal({
                                     ))
                                 ) : (
                                     <p className="text-gray-500 text-center py-2">
-                                        No containers ready for delivery.
+                                        No relevant containers found.
                                     </p>
                                 )}
                             </div>
@@ -225,16 +257,9 @@ export default function AssignBookingDriverModal({
                         <button 
                             type="button" 
                             onClick={onClose} 
-                            className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm"
+                            className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-bold w-full"
                         >
-                            Close
-                        </button>
-                        <button 
-                            onClick={handleConfirm}
-                            disabled={isSaving} 
-                            className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800 text-sm font-bold"
-                        >
-                            Assign All
+                            Done
                         </button>
                     </div>
                 </div>
