@@ -10,12 +10,7 @@ import { useAppContext } from '../context/AppContext';
 import { CONTAINER_STATUSES } from '../constants';
 import { archiveBooking, unarchiveBooking, assignDriverToBooking, createCollectionAssignment } from '../services/containerService';
 import AssignBookingDriverModal from './AssignBookingDriverModal';
-import CreateCollectionModal from './CreateCollectionModal'; // Import new modal
-
-// Simple Down Arrow Icon for "Collect"
-const DownloadIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-);
+import CreateCollectionModal from './CreateCollectionModal';
 
 export default function Bookings() {
     // --- Get data from context ---
@@ -56,7 +51,7 @@ export default function Bookings() {
     const [assignDriverState, setAssignDriverState] = useState({ isOpen: false, booking: null });
     const [selectedDriverForBooking, setSelectedDriverForBooking] = useState('');
     
-    // --- New: State for Collection Modal ---
+    // --- State for Collection Modal ---
     const [collectionModal, setCollectionModal] = useState({ isOpen: false, booking: null });
 
     // --- Derived Data ---
@@ -128,11 +123,6 @@ export default function Bookings() {
         setViewingBooking(null);
     };
 
-    const handleAddContainerClick = (bookingId, e) => {
-        e.stopPropagation();
-        openModal(null); 
-    };
-
     const handleArchiveClick = async (booking, e) => {
         e.stopPropagation();
         if (!window.confirm(`Are you sure you want to archive Booking ${booking.id}? This will remove it from the Active list.`)) return;
@@ -165,7 +155,7 @@ export default function Bookings() {
         }
     };
 
-    // --- New Handlers for Driver Assignment ---
+    // --- Handlers for Driver Assignment ---
     const handleOpenAssignDriver = (booking, e) => {
         e.stopPropagation();
         setAssignDriverState({ isOpen: true, booking });
@@ -195,7 +185,7 @@ export default function Bookings() {
         }
     };
 
-    // --- New Handlers for Collection ---
+    // --- Handlers for Collection ---
     const handleOpenCollection = (booking, e) => {
         e.stopPropagation();
         setCollectionModal({ isOpen: true, booking });
@@ -410,18 +400,16 @@ export default function Bookings() {
                                         </div>
                                     </div>
                                     <div className="flex gap-1 flex-wrap justify-end max-w-[50%]">
-                                        {/* Create Collection / Pickup Button (New) */}
-                                        {activeTab === 'active' && !isFull && (
-                                            <button onClick={(e) => handleOpenCollection(booking, e)} className="p-2 text-gray-400 hover:text-cyan-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Schedule Collection"><DownloadIcon /></button>
-                                        )}
-
+                                        
                                         <button onClick={(e) => openForm(booking, e)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10" title="Edit Booking"><PencilIcon /></button>
                                         
                                         <button onClick={(e) => handleOpenAssignDriver(booking, e)} className="p-2 text-gray-400 hover:text-indigo-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Assign Driver"><TruckIcon /></button>
 
+                                        {/* SCHEDULE COLLECTION BUTTON (Replaces Add Container for quick collection) */}
                                         {activeTab === 'active' && !isFull && (
-                                            <button onClick={(e) => handleAddContainerClick(booking.id, e)} className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Add Container"><PlusCircleIcon /></button>
+                                            <button onClick={(e) => handleOpenCollection(booking, e)} className="p-2 text-gray-400 hover:text-cyan-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Schedule Collection"><PlusCircleIcon /></button>
                                         )}
+
                                         {activeTab === 'active' && isFull && (
                                             <button onClick={(e) => handleArchiveClick(booking, e)} className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Archive Full Booking"><ArchiveIcon /></button>
                                         )}
