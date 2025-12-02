@@ -13,7 +13,8 @@ export default function AssignBookingDriverModal({
     setSelectedDriver,
     onClose,
     onConfirm,
-    isSaving
+    isSaving,
+    initialScheduledDate // New prop to pre-fill date
 }) {
     const { paths, addToast } = useAppContext(); // Get context for paths/toast
     const { containersPath, eventsPath } = paths;
@@ -21,9 +22,23 @@ export default function AssignBookingDriverModal({
     const [isContainerListOpen, setIsContainerListOpen] = useState(true); // Default open to see containers
     const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
     
-    // Split Date/Time state for strict hour selection
-    const [returnDate, setReturnDate] = useState('');
-    const [returnHour, setReturnHour] = useState('08'); // Default to 8 AM
+    // Initialize date state based on prop (or default empty)
+    const [returnDate, setReturnDate] = useState(() => {
+        if (initialScheduledDate) {
+            // Handle Firestore Timestamp or Date object
+            const d = initialScheduledDate.toDate ? initialScheduledDate.toDate() : new Date(initialScheduledDate);
+            return !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '';
+        }
+        return '';
+    });
+
+    const [returnHour, setReturnHour] = useState(() => {
+        if (initialScheduledDate) {
+            const d = initialScheduledDate.toDate ? initialScheduledDate.toDate() : new Date(initialScheduledDate);
+            return !isNaN(d.getTime()) ? d.getHours().toString().padStart(2, '0') : '08';
+        }
+        return '08';
+    });
 
     // Generate hours 00-23
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));

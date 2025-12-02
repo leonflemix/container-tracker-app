@@ -1,9 +1,9 @@
 // File: src/components/Bookings.jsx
 // Location: src/components
 
-import React, { useState, useMemo, useEffect } from 'react'; // Added useEffect
+import React, { useState, useMemo, useEffect } from 'react';
 import { db, Timestamp } from '../firebase';
-import { doc, setDoc, collection, query, onSnapshot } from 'firebase/firestore'; // Added imports
+import { doc, setDoc, collection, query, onSnapshot } from 'firebase/firestore';
 import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon, UndoIcon } from '../icons';
 import { useAppContext } from '../context/AppContext';
@@ -54,7 +54,8 @@ export default function Bookings() {
     const [pickups, setPickups] = useState([]); // State for pickups
 
     // --- State for Modals ---
-    const [assignDriverState, setAssignDriverState] = useState({ isOpen: false, booking: null });
+    // Updated to include initialDate
+    const [assignDriverState, setAssignDriverState] = useState({ isOpen: false, booking: null, initialDate: null });
     const [selectedDriverForBooking, setSelectedDriverForBooking] = useState('');
     
     // --- State for Collection Modal (Create & Edit) ---
@@ -182,14 +183,16 @@ export default function Bookings() {
     };
 
     // --- Handlers for Driver Assignment ---
-    const handleOpenAssignDriver = (booking, e) => {
+    const handleOpenAssignDriver = (booking, e, container = null) => {
         e.stopPropagation();
-        setAssignDriverState({ isOpen: true, booking });
-        setSelectedDriverForBooking(booking.assignedDriver || '');
+        const initialDate = container?.scheduledReturn || null;
+        setAssignDriverState({ isOpen: true, booking, initialDate });
+        // Use container's driver if editing specific container, else booking default
+        const driverToSelect = container ? container.deliveryDriver : (booking.assignedDriver || '');
+        setSelectedDriverForBooking(driverToSelect);
     };
 
-    const handleAssignDriverSubmit = async (e) => {
-        if (e) e.preventDefault();
+    const handleAssignDriverSubmit = async (scheduledReturn) => {
         setIsSaving(true);
         try {
             let targetPath = bookingsPath;
@@ -201,8 +204,9 @@ export default function Bookings() {
                 bookingId: assignDriverState.booking.id,
                 driverName: selectedDriverForBooking
             });
+            // We could also implement batch update for scheduledReturn here if needed
             addToast('Driver assignment updated successfully', 'success');
-            setAssignDriverState({ isOpen: false, booking: null });
+            setAssignDriverState({ isOpen: false, booking: null, initialDate: null });
         } catch (error) {
             console.error("Error assigning driver:", error);
             addToast("Failed to assign driver.", 'error');
@@ -496,15 +500,20 @@ export default function Bookings() {
                                                 </div>
                                             )}
 
-                                            {/* NEW: Show Scheduled Deliveries */}
+                                            {/* NEW: Show Scheduled Deliveries - Clickable for Edit */}
                                             {bookingDeliveries.length > 0 && (
                                                 <div className="mt-1 space-y-1">
                                                     {bookingDeliveries.map(c => (
-                                                        <span key={c.id} className="inline-block text-xs font-semibold bg-purple-900/50 text-purple-200 px-2 py-0.5 rounded border border-purple-800 w-fit flex items-center gap-1">
+                                                        <button 
+                                                            key={c.id} 
+                                                            onClick={(e) => handleOpenAssignDriver(booking, e, c)} // Open for edit specific container
+                                                            className="inline-block text-xs font-semibold bg-purple-900/50 text-purple-200 px-2 py-0.5 rounded border border-purple-800 w-fit flex items-center gap-1 hover:bg-purple-800 transition-colors"
+                                                            title="Edit Delivery"
+                                                        >
                                                             <TruckIcon className="w-3 h-3" /> 
                                                             {c.deliveryDriver} - {c.id}
                                                             {c.scheduledReturn && <span className="text-[10px] opacity-75 ml-1">({new Date(c.scheduledReturn.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>}
-                                                        </span>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             )}
@@ -559,8 +568,9 @@ export default function Bookings() {
                     selectedDriver={selectedDriverForBooking}
                     setSelectedDriver={setSelectedDriverForBooking}
                     onConfirm={handleAssignDriverSubmit}
-                    onClose={() => setAssignDriverState({ isOpen: false, booking: null })}
+                    onClose={() => setAssignDriverState({ isOpen: false, booking: null, initialDate: null })}
                     isSaving={isSaving}
+                    initialScheduledDate={assignDriverState.initialDate} // Pass initial date
                 />
             )}
 
