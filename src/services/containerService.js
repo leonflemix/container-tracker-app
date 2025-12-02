@@ -399,9 +399,9 @@ export async function assignDriverToBooking({ bookingPath, bookingId, driverName
     return { success: true };
 }
 
-// --- NEW: Create Collection Assignment (Pickup) ---
+// --- Collection Assignments (Pickups) ---
+
 export async function createCollectionAssignment({ pickupsPath, bookingId, driverName, scheduledDate }) {
-    // Generate a simple unique ID for the pickup job
     const pickupId = `COL-${Date.now()}`;
     const pickupRef = doc(db, pickupsPath, pickupId);
     
@@ -416,4 +416,21 @@ export async function createCollectionAssignment({ pickupsPath, bookingId, drive
 
     await setDoc(pickupRef, data);
     return { success: true, id: pickupId };
+}
+
+// --- NEW: Update Collection Assignment ---
+export async function updateCollectionAssignment({ pickupsPath, pickupId, driverName, scheduledDate }) {
+    const pickupRef = doc(db, pickupsPath, pickupId);
+    await setDoc(pickupRef, {
+        driver: driverName,
+        scheduledDate: Timestamp.fromDate(scheduledDate),
+        lastUpdate: Timestamp.now()
+    }, { merge: true });
+    return { success: true };
+}
+
+// --- NEW: Delete Collection Assignment ---
+export async function deleteCollectionAssignment({ pickupsPath, pickupId }) {
+    await deleteDoc(doc(db, pickupsPath, pickupId));
+    return { success: true };
 }

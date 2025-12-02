@@ -1,10 +1,21 @@
 // File: src/components/CreateCollectionModal.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function CreateCollectionModal({ booking, drivers = [], onClose, onConfirm, isSaving }) {
+export default function CreateCollectionModal({ booking, pickup, drivers = [], onClose, onConfirm, onDelete, isSaving }) {
     const [selectedDriver, setSelectedDriver] = useState('');
     const [date, setDate] = useState('');
     const [hour, setHour] = useState('08'); // Default to 8 AM
+
+    useEffect(() => {
+        if (pickup) {
+            setSelectedDriver(pickup.driver || '');
+            if (pickup.scheduledDate) {
+                const d = pickup.scheduledDate instanceof Date ? pickup.scheduledDate : pickup.scheduledDate.toDate();
+                setDate(d.toISOString().split('T')[0]);
+                setHour(d.getHours().toString().padStart(2, '0'));
+            }
+        }
+    }, [pickup]);
 
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 
@@ -17,11 +28,13 @@ export default function CreateCollectionModal({ booking, drivers = [], onClose, 
         onConfirm({ driver: selectedDriver, scheduledDate });
     };
 
+    const isEditMode = !!pickup;
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
                 <header className="flex justify-between items-center p-4 border-b border-gray-700">
-                    <h3 className="text-lg font-bold text-white">Schedule Collection</h3>
+                    <h3 className="text-lg font-bold text-white">{isEditMode ? 'Edit Collection' : 'Schedule Collection'}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
                 </header>
                 
@@ -71,11 +84,22 @@ export default function CreateCollectionModal({ booking, drivers = [], onClose, 
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg text-white">Cancel</button>
-                        <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800">
-                            {isSaving ? 'Saving...' : 'Schedule'}
-                        </button>
+                    <div className="flex justify-between gap-3 pt-2">
+                        {isEditMode ? (
+                            <button 
+                                type="button" 
+                                onClick={onDelete} 
+                                className="py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-white"
+                            >
+                                Delete
+                            </button>
+                        ) : <div></div>}
+                        <div className="flex gap-2">
+                            <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg text-white">Cancel</button>
+                            <button type="submit" disabled={isSaving} className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800">
+                                {isEditMode ? 'Update' : 'Schedule'}
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

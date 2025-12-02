@@ -8,7 +8,7 @@ import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon, UndoIcon } from '../icons';
 import { useAppContext } from '../context/AppContext';
 import { CONTAINER_STATUSES } from '../constants';
-import { archiveBooking, unarchiveBooking, assignDriverToBooking, createCollectionAssignment } from '../services/containerService';
+import { archiveBooking, unarchiveBooking, assignDriverToBooking, createCollectionAssignment, updateCollectionAssignment, deleteCollectionAssignment } from '../services/containerService';
 import AssignBookingDriverModal from './AssignBookingDriverModal';
 import CreateCollectionModal from './CreateCollectionModal';
 
@@ -57,8 +57,8 @@ export default function Bookings() {
     const [assignDriverState, setAssignDriverState] = useState({ isOpen: false, booking: null });
     const [selectedDriverForBooking, setSelectedDriverForBooking] = useState('');
     
-    // --- State for Collection Modal ---
-    const [collectionModal, setCollectionModal] = useState({ isOpen: false, booking: null });
+    // --- State for Collection Modal (Create & Edit) ---
+    const [collectionModal, setCollectionModal] = useState({ isOpen: false, booking: null, pickup: null });
 
     // --- Data Fetching for Pickups ---
     useEffect(() => {
@@ -105,12 +105,15 @@ export default function Bookings() {
     }, [assignDriverState.booking, containers, archivedContainers]);
 
     const getFilledCount = (bookingId) => {
-        if (activeTab === 'active' && filledBookingCounts && typeof filledBookingCounts[bookingId] === 'number') {
-            return filledBookingCounts[bookingId];
-        }
+        // Base count: Live containers + Archived containers
         const liveCount = containers.filter(c => c.booking === bookingId).length;
         const archivedCount = archivedContainers.filter(c => c.booking === bookingId).length;
-        return liveCount + archivedCount;
+        
+        // Add Scheduled Collections (pickups) to the count
+        // This ensures the progress bar includes pending collections
+        const scheduledPickupsCount = pickups.filter(p => p.bookingId === bookingId).length;
+        
+        return liveCount + archivedCount + scheduledPickupsCount;
     };
 
     // --- Handlers ---
@@ -209,25 +212,57 @@ export default function Bookings() {
     };
 
     // --- Handlers for Collection ---
-    const handleOpenCollection = (booking, e) => {
+    const handleOpenCollection = (booking, e, pickup = null) => {
         e.stopPropagation();
-        setCollectionModal({ isOpen: true, booking });
+        setCollectionModal({ isOpen: true, booking, pickup });
     };
 
-    const handleCreateCollection = async ({ driver, scheduledDate }) => {
+    const handleCreateOrUpdateCollection = async ({ driver, scheduledDate }) => {
         setIsSaving(true);
         try {
-            await createCollectionAssignment({
-                pickupsPath,
-                bookingId: collectionModal.booking.id,
-                driverName: driver,
-                scheduledDate
-            });
-            addToast('Collection scheduled successfully!', 'success');
-            setCollectionModal({ isOpen: false, booking: null });
+            if (collectionModal.pickup) {
+                // Update
+                await updateCollectionAssignment({
+                    pickupsPath,
+                    pickupId: collectionModal.pickup.id,
+                    driverName: driver,
+                    scheduledDate
+                });
+                addToast('Collection updated successfully!', 'success');
+            } else {
+                // Create
+                await createCollectionAssignment({
+                    pickupsPath,
+                    bookingId: collectionModal.booking.id,
+                    driverName: driver,
+                    scheduledDate
+                });
+                addToast('Collection scheduled successfully!', 'success');
+            }
+            setCollectionModal({ isOpen: false, booking: null, pickup: null });
         } catch (error) {
             console.error("Error scheduling collection:", error);
             addToast("Failed to schedule collection.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteCollection = async () => {
+        if (!collectionModal.pickup) return;
+        if (!window.confirm("Are you sure you want to delete this scheduled collection?")) return;
+
+        setIsSaving(true);
+        try {
+            await deleteCollectionAssignment({
+                pickupsPath,
+                pickupId: collectionModal.pickup.id
+            });
+            addToast('Collection deleted.', 'success');
+            setCollectionModal({ isOpen: false, booking: null, pickup: null });
+        } catch (error) {
+            console.error("Error deleting collection:", error);
+            addToast("Failed to delete collection.", 'error');
         } finally {
             setIsSaving(false);
         }
@@ -439,11 +474,16 @@ export default function Bookings() {
                                             {bookingPickups.length > 0 && (
                                                 <div className="mt-1 space-y-1">
                                                     {bookingPickups.map(p => (
-                                                        <span key={p.id} className="inline-block text-xs font-semibold bg-cyan-900/50 text-cyan-200 px-2 py-0.5 rounded border border-cyan-800 w-fit flex items-center gap-1">
+                                                        <button 
+                                                            key={p.id} 
+                                                            onClick={(e) => handleOpenCollection(booking, e, p)} // Open for edit
+                                                            className="inline-block text-xs font-semibold bg-cyan-900/50 text-cyan-200 px-2 py-0.5 rounded border border-cyan-800 w-fit flex items-center gap-1 hover:bg-cyan-900 transition-colors"
+                                                            title="Edit Collection"
+                                                        >
                                                             <span className="text-xs">🔄</span> 
                                                             {p.driver}
                                                             {p.scheduledDate && <span className="text-[10px] opacity-75 ml-1">({p.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>}
-                                                        </span>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             )}
@@ -505,9 +545,11 @@ export default function Bookings() {
             {collectionModal.isOpen && (
                 <CreateCollectionModal 
                     booking={collectionModal.booking}
+                    pickup={collectionModal.pickup}
                     drivers={drivers}
-                    onClose={() => setCollectionModal({ isOpen: false, booking: null })}
-                    onConfirm={handleCreateCollection}
+                    onClose={() => setCollectionModal({ isOpen: false, booking: null, pickup: null })}
+                    onConfirm={handleCreateOrUpdateCollection}
+                    onDelete={handleDeleteCollection}
                     isSaving={isSaving}
                 />
             )}
