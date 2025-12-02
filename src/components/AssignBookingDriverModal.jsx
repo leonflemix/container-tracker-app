@@ -12,7 +12,7 @@ export default function AssignBookingDriverModal({
     selectedDriver,
     setSelectedDriver,
     onClose,
-    onConfirm, // Added onConfirm from props
+    onConfirm,
     isSaving
 }) {
     const { paths, addToast } = useAppContext(); // Get context for paths/toast
@@ -34,10 +34,22 @@ export default function AssignBookingDriverModal({
         return new Date(`${returnDate}T${returnHour}:00:00`);
     };
 
-    // Filter containers: If a driver is selected, exclude containers already assigned to that driver
-    const displayedContainers = containers.filter(container => 
-        !selectedDriver || container.deliveryDriver !== selectedDriver
-    );
+    // --- FILTER LOGIC ---
+    // Only allow assignment for containers ready to leave the yard
+    const ALLOWED_STATUSES = [
+        'ALL GOOD, BOOK FOR DELIVERY',
+        'NEED SQUISH',
+        'CHASSIS NEEDS REPAIR'
+    ];
+
+    // Filter containers: 
+    // 1. If a driver is selected, exclude containers already assigned to that driver
+    // 2. Only show containers present in the ALLOWED_STATUSES list
+    const displayedContainers = containers.filter(container => {
+        const notAssignedToCurrent = !selectedDriver || container.deliveryDriver !== selectedDriver;
+        const isAllowedStatus = ALLOWED_STATUSES.includes(container.status);
+        return notAssignedToCurrent && isAllowedStatus;
+    });
 
     // Group containers by status for display
     const groupedContainers = displayedContainers.reduce((acc, container) => {
@@ -76,15 +88,9 @@ export default function AssignBookingDriverModal({
         }
     };
 
-    // Handler for "Assign All"
+    // Handler for "Assign All" (Batch Assign)
     const handleConfirm = () => {
         const scheduledReturn = getScheduledReturnDate();
-        // Pass string format or date object depending on what parent expects. 
-        // Based on previous code, parent expects the value to be passed to onConfirm(scheduledReturn)
-        // Previous parent used: onClick={() => onConfirm(scheduledReturn)} 
-        // But parent expects logic. Let's pass the date string or object.
-        // Actually, looking at Bookings.jsx, it doesn't use the arg passed to onConfirm for the batch assignment
-        // in handleAssignDriverSubmit. However, assuming we might want to update it later to support return dates for booking-level assignment:
         onConfirm(scheduledReturn); 
     };
 
@@ -152,7 +158,7 @@ export default function AssignBookingDriverModal({
                             onClick={() => setIsContainerListOpen(!isContainerListOpen)}
                             className="w-full p-2 bg-gray-700 text-left text-sm text-gray-300 flex justify-between items-center hover:bg-gray-600 transition-colors"
                         >
-                            <span className="font-semibold">Review Containers ({displayedContainers.length})</span>
+                            <span className="font-semibold">Assignable Containers ({displayedContainers.length})</span>
                             <span className="text-xs">{isContainerListOpen ? '▲' : '▼'}</span>
                         </button>
                         
@@ -193,7 +199,7 @@ export default function AssignBookingDriverModal({
                                     ))
                                 ) : (
                                     <p className="text-gray-500 text-center py-2">
-                                        {selectedDriver ? `All containers are already assigned to ${selectedDriver}.` : "No containers found."}
+                                        No containers ready for delivery.
                                     </p>
                                 )}
                             </div>
