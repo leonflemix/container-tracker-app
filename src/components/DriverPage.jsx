@@ -106,7 +106,7 @@ export default function DriverPage() {
                     <div>
                         <h1 className="text-lg font-bold text-white leading-tight">{selectedDriverName}</h1>
                         <p className="text-xs text-gray-400">
-                            {myDeliveries.length} Active • {myPickups.length} Collections
+                            {myDeliveries.length} Deliveries • {myPickups.length} Collections
                         </p>
                     </div>
                 </div>
@@ -120,46 +120,7 @@ export default function DriverPage() {
 
             <div className="space-y-6 px-2">
                 
-                {/* 1. SCHEDULED COLLECTIONS (Pickups) */}
-                {myPickups.length > 0 && (
-                    <section>
-                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1 flex justify-between items-end">
-                            <span>Pickups (Collections)</span>
-                            <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full">{myPickups.length}</span>
-                        </h3>
-                        <div className="space-y-3">
-                            {myPickups.map(pickup => (
-                                <div 
-                                    key={pickup.id} 
-                                    className="bg-gray-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm relative overflow-hidden"
-                                >
-                                    <div className="flex justify-between items-start mb-3 relative z-10">
-                                        <div>
-                                            <span className="block text-xs text-green-400 font-bold mb-1">COLLECT FROM PORT</span>
-                                            <span className="text-xl font-bold text-white block">{pickup.bookingId}</span>
-                                        </div>
-                                        {pickup.scheduledDate && (
-                                            <div className="text-right bg-gray-900/50 p-2 rounded-lg">
-                                                <span className="block text-xs text-gray-400 font-bold uppercase">{pickup.scheduledDate.toLocaleDateString([], {weekday: 'short'})}</span>
-                                                <span className="block text-lg font-bold text-white">{pickup.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    <button 
-                                        onClick={() => openModal(null)} 
-                                        className="w-full mt-2 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-md"
-                                    >
-                                        <PlusCircleIcon />
-                                        <span>Confirm Collection (Add)</span>
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {/* 2. ACTIVE DELIVERIES */}
+                {/* 1. ACTIVE DELIVERIES (Blue) - TOP */}
                 <section>
                     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1 flex justify-between items-end">
                         <span>Active Deliveries</span>
@@ -207,6 +168,45 @@ export default function DriverPage() {
                         </div>
                     )}
                 </section>
+
+                {/* 2. SCHEDULED COLLECTIONS (Green) - BOTTOM */}
+                {myPickups.length > 0 && (
+                    <section>
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1 flex justify-between items-end">
+                            <span>Pickups (Collections)</span>
+                            <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full">{myPickups.length}</span>
+                        </h3>
+                        <div className="space-y-3">
+                            {myPickups.map(pickup => (
+                                <div 
+                                    key={pickup.id} 
+                                    className="bg-gray-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm relative overflow-hidden"
+                                >
+                                    <div className="flex justify-between items-start mb-3 relative z-10">
+                                        <div>
+                                            <span className="block text-xs text-green-400 font-bold mb-1">COLLECT FROM PORT</span>
+                                            <span className="text-xl font-bold text-white block">{pickup.bookingId}</span>
+                                        </div>
+                                        {pickup.scheduledDate && (
+                                            <div className="text-right bg-gray-900/50 p-2 rounded-lg">
+                                                <span className="block text-xs text-gray-400 font-bold uppercase">{pickup.scheduledDate.toLocaleDateString([], {weekday: 'short'})}</span>
+                                                <span className="block text-lg font-bold text-white">{pickup.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => openModal(null)} 
+                                        className="w-full mt-2 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-md"
+                                    >
+                                        <PlusCircleIcon />
+                                        <span>Confirm Collection (Add)</span>
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* Empty State Helper */}
                 {myPickups.length === 0 && myDeliveries.length === 0 && (
