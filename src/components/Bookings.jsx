@@ -446,6 +446,14 @@ export default function Bookings() {
 
                         // Find pickups for this booking
                         const bookingPickups = pickups.filter(p => p.bookingId === booking.id);
+
+                        // NEW: Find active deliveries assigned to a driver for this booking
+                        const bookingDeliveries = containers.filter(c => 
+                            c.booking === booking.id && 
+                            c.deliveryDriver && 
+                            !c.status.includes('Pier Accepted') && 
+                            !c.archivedAt // Only show active deliveries
+                        );
                         
                         return (
                             <div key={booking.id} onClick={() => handleBookingClick(booking)} className="bg-gray-700 p-5 rounded-lg shadow-md hover:bg-gray-650 cursor-pointer transition-all duration-200 group relative border border-gray-600 hover:border-blue-500">
@@ -484,6 +492,19 @@ export default function Bookings() {
                                                             {p.driver}
                                                             {p.scheduledDate && <span className="text-[10px] opacity-75 ml-1">({p.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>}
                                                         </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* NEW: Show Scheduled Deliveries */}
+                                            {bookingDeliveries.length > 0 && (
+                                                <div className="mt-1 space-y-1">
+                                                    {bookingDeliveries.map(c => (
+                                                        <span key={c.id} className="inline-block text-xs font-semibold bg-purple-900/50 text-purple-200 px-2 py-0.5 rounded border border-purple-800 w-fit flex items-center gap-1">
+                                                            <TruckIcon className="w-3 h-3" /> 
+                                                            {c.deliveryDriver} - {c.id}
+                                                            {c.scheduledReturn && <span className="text-[10px] opacity-75 ml-1">({new Date(c.scheduledReturn.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>}
+                                                        </span>
                                                     ))}
                                                 </div>
                                             )}
@@ -537,6 +558,7 @@ export default function Bookings() {
                     containers={bookingContainersForAssign}
                     selectedDriver={selectedDriverForBooking}
                     setSelectedDriver={setSelectedDriverForBooking}
+                    onConfirm={handleAssignDriverSubmit}
                     onClose={() => setAssignDriverState({ isOpen: false, booking: null })}
                     isSaving={isSaving}
                 />
