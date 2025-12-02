@@ -237,6 +237,14 @@ export default function Bookings() {
         return found ? found.emoji : '📍';
     };
 
+    // --- LOGIC FOR THUMBS UP ---
+    // Statuses that trigger the thumbs up (assignable)
+    const ASSIGNABLE_STATUSES = [
+        'ALL GOOD, BOOK FOR DELIVERY',
+        'NEED SQUISH',
+        'CHASSIS NEEDS REPAIR'
+    ];
+
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg min-h-[50vh]">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 border-b border-gray-700 pb-4 gap-4">
@@ -351,9 +359,9 @@ export default function Bookings() {
                         const progress = Math.min((filled / booking.quantity) * 100, 100);
                         const isFull = filled >= booking.quantity;
                         
-                        // Check if any containers are "Ready for Delivery"
-                        const hasReadyContainers = containers.some(c => 
-                            c.booking === booking.id && c.status === 'ALL GOOD, BOOK FOR DELIVERY'
+                        // Check if any containers have assignable statuses
+                        const hasAssignableContainers = containers.some(c => 
+                            c.booking === booking.id && ASSIGNABLE_STATUSES.includes(c.status)
                         );
                         
                         return (
@@ -364,8 +372,8 @@ export default function Bookings() {
                                             <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{booking.id}</h3>
                                             {/* Thumbs Up Indicator */}
                                             <span 
-                                                className={`text-lg transition-colors ${hasReadyContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`}
-                                                title={hasReadyContainers ? "Has containers ready for delivery" : "No containers ready"}
+                                                className={`text-lg transition-colors ${hasAssignableContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`}
+                                                title={hasAssignableContainers ? "Has containers assignable for delivery" : "No assignable containers"}
                                             >
                                                 👍🏻
                                             </span>
