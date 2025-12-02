@@ -21,10 +21,22 @@ export default function AssignBookingDriverModal({
     const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
     const [scheduledReturn, setScheduledReturn] = useState('');
 
-    // Filter containers: If a driver is selected, exclude containers already assigned to that driver
-    const displayedContainers = containers.filter(container => 
-        !selectedDriver || container.deliveryDriver !== selectedDriver
-    );
+    // --- FILTER LOGIC ---
+    // Only allow assignment for specific statuses
+    const ALLOWED_STATUSES = [
+        'ALL GOOD, BOOK FOR DELIVERY',
+        'NEED SQUISH',
+        'CHASSIS NEEDS REPAIR'
+    ];
+
+    // Filter containers: 
+    // 1. If a driver is selected, exclude containers already assigned to that driver
+    // 2. Only show containers present in the ALLOWED_STATUSES list
+    const displayedContainers = containers.filter(container => {
+        const notAssignedToCurrent = !selectedDriver || container.deliveryDriver !== selectedDriver;
+        const isAllowedStatus = ALLOWED_STATUSES.includes(container.status);
+        return notAssignedToCurrent && isAllowedStatus;
+    });
 
     // Group containers by status for display
     const groupedContainers = displayedContainers.reduce((acc, container) => {
@@ -152,7 +164,7 @@ export default function AssignBookingDriverModal({
                                     ))
                                 ) : (
                                     <p className="text-gray-500 text-center py-2">
-                                        {selectedDriver ? `All containers are already assigned to ${selectedDriver}.` : "No containers found."}
+                                        No assignable containers found.
                                     </p>
                                 )}
                             </div>
