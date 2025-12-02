@@ -12,6 +12,7 @@ export default function AssignBookingDriverModal({
     selectedDriver,
     setSelectedDriver,
     onClose,
+    onConfirm, // Added onConfirm from props
     isSaving
 }) {
     const { paths, addToast } = useAppContext(); // Get context for paths/toast
@@ -19,24 +20,24 @@ export default function AssignBookingDriverModal({
 
     const [isContainerListOpen, setIsContainerListOpen] = useState(true); // Default open to see containers
     const [assigningContainerId, setAssigningContainerId] = useState(null); // Track local loading state
-    const [scheduledReturn, setScheduledReturn] = useState('');
+    
+    // Split Date/Time state for strict hour selection
+    const [returnDate, setReturnDate] = useState('');
+    const [returnHour, setReturnHour] = useState('08'); // Default to 8 AM
 
-    // --- FILTER LOGIC ---
-    // Only allow assignment for specific statuses
-    const ALLOWED_STATUSES = [
-        'ALL GOOD, BOOK FOR DELIVERY',
-        'NEED SQUISH',
-        'CHASSIS NEEDS REPAIR'
-    ];
+    // Generate hours 00-23
+    const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
 
-    // Filter containers: 
-    // 1. If a driver is selected, exclude containers already assigned to that driver
-    // 2. Only show containers present in the ALLOWED_STATUSES list
-    const displayedContainers = containers.filter(container => {
-        const notAssignedToCurrent = !selectedDriver || container.deliveryDriver !== selectedDriver;
-        const isAllowedStatus = ALLOWED_STATUSES.includes(container.status);
-        return notAssignedToCurrent && isAllowedStatus;
-    });
+    // Helper to construct the final date object
+    const getScheduledReturnDate = () => {
+        if (!returnDate) return null;
+        return new Date(`${returnDate}T${returnHour}:00:00`);
+    };
+
+    // Filter containers: If a driver is selected, exclude containers already assigned to that driver
+    const displayedContainers = containers.filter(container => 
+        !selectedDriver || container.deliveryDriver !== selectedDriver
+    );
 
     // Group containers by status for display
     const groupedContainers = displayedContainers.reduce((acc, container) => {
@@ -55,6 +56,8 @@ export default function AssignBookingDriverModal({
         }
         
         setAssigningContainerId(container.id);
+        const scheduledReturn = getScheduledReturnDate();
+
         try {
             await assignDriverToContainer({
                 containersPath,
@@ -62,7 +65,7 @@ export default function AssignBookingDriverModal({
                 containerId: container.id,
                 selectedDriver,
                 containerData: container,
-                scheduledReturn // Pass the selected return date
+                scheduledReturn // Pass the constructed date
             });
             addToast(`Container ${container.id} assigned to ${selectedDriver}`, "success");
         } catch (error) {
@@ -71,6 +74,18 @@ export default function AssignBookingDriverModal({
         } finally {
             setAssigningContainerId(null);
         }
+    };
+
+    // Handler for "Assign All"
+    const handleConfirm = () => {
+        const scheduledReturn = getScheduledReturnDate();
+        // Pass string format or date object depending on what parent expects. 
+        // Based on previous code, parent expects the value to be passed to onConfirm(scheduledReturn)
+        // Previous parent used: onClick={() => onConfirm(scheduledReturn)} 
+        // But parent expects logic. Let's pass the date string or object.
+        // Actually, looking at Bookings.jsx, it doesn't use the arg passed to onConfirm for the batch assignment
+        // in handleAssignDriverSubmit. However, assuming we might want to update it later to support return dates for booking-level assignment:
+        onConfirm(scheduledReturn); 
     };
 
     return (
@@ -106,14 +121,28 @@ export default function AssignBookingDriverModal({
                         </select>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Scheduled Return (Optional)</label>
-                        <input 
-                            type="datetime-local" 
-                            value={scheduledReturn}
-                            onChange={(e) => setScheduledReturn(e.target.value)}
-                            className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Return Date</label>
+                            <input 
+                                type="date" 
+                                value={returnDate}
+                                onChange={(e) => setReturnDate(e.target.value)}
+                                className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Time (Hour)</label>
+                            <select 
+                                value={returnHour} 
+                                onChange={(e) => setReturnHour(e.target.value)} 
+                                className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                {hours.map(h => (
+                                    <option key={h} value={h}>{h}:00</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     {/* Container Status List Dropdown */}
@@ -164,20 +193,27 @@ export default function AssignBookingDriverModal({
                                     ))
                                 ) : (
                                     <p className="text-gray-500 text-center py-2">
-                                        No assignable containers found.
+                                        {selectedDriver ? `All containers are already assigned to ${selectedDriver}.` : "No containers found."}
                                     </p>
                                 )}
                             </div>
                         )}
                     </div>
 
-                    <div className="flex justify-end pt-2">
+                    <div className="flex justify-end pt-2 gap-3">
                         <button 
                             type="button" 
                             onClick={onClose} 
                             className="py-2 px-4 bg-gray-600 hover:bg-gray-700 rounded-lg text-white text-sm"
                         >
                             Close
+                        </button>
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={isSaving} 
+                            className="py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white disabled:bg-blue-800 text-sm font-bold"
+                        >
+                            Assign All
                         </button>
                     </div>
                 </div>
