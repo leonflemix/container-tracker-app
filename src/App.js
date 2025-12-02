@@ -4,18 +4,13 @@
 import React, { useState, useMemo } from 'react';
 // We no longer need data-fetching imports here
 import { CONTAINER_STATUSES } from './constants';
-// --- ADDED MapPinIcon directly here since I can't edit icons.jsx easily without a full file rewrite, 
-// OR I can just assume it exists or use a generic one. I'll define it inline here for safety or import if you update icons.jsx later.
-// For now, let's reuse a generic icon from your list or assume I can add it. 
-// I will reuse "DatabaseIcon" visually if needed, but let's assume standard icons. 
-// Actually, I'll add the MapPinIcon definition inside the icons import block if I could, but I can't edit that file partially.
-// I will just use the "HomeIcon" or similar for now in the button, or define a local SVG.
 import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
 import ContainerCard from './components/ContainerCard';
 import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
 import Bookings from './components/Bookings';
-import Locations from './components/Locations'; // Import new Locations page
+import Locations from './components/Locations';
+import DriverPage from './components/DriverPage'; // Import Driver Page
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
@@ -23,12 +18,15 @@ import { ToastProvider } from './hooks/useToasts';
 import Dashboard from './components/Dashboard';
 import { AppProvider, useAppContext } from './context/AppContext';
 
-// Simple inline icon for Locations to avoid breaking if icons.jsx isn't updated
 const MapIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
 );
 
-// Main App Component Content
+// Icon for Driver Page
+const SteeringWheelIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20"/><path d="M2 12h20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
+);
+
 function AppContent() {
     const {
         containers,
@@ -48,7 +46,7 @@ function AppContent() {
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
     const [preselectedBooking, setPreselectedBooking] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pageView, setPageView] = useState('dashboard'); // 'dashboard', 'live', 'archive', 'reports', 'bookings', 'locations'
+    const [pageView, setPageView] = useState('dashboard'); // Added 'drivers'
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
     // State for sorting and filtering
@@ -62,7 +60,7 @@ function AppContent() {
     });
     const [showFilters, setShowFilters] = useState(false);
 
-    // --- Save preferences to localStorage ---
+    // --- Save preferences ---
     React.useEffect(() => {
         localStorage.setItem('containerTrackerView', view);
     }, [view]);
@@ -174,6 +172,9 @@ function AppContent() {
         if (pageView === 'locations') {
             return <Locations />;
         }
+        if (pageView === 'drivers') { // New Driver Page
+            return <DriverPage />;
+        }
         
         return (
             <>
@@ -197,10 +198,8 @@ function AppContent() {
                             </button>
                         </div>
                     </div>
-                    {/* Collapsible Filter and Sort Section */}
                     {showFilters && (
                         <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col sm:flex-row gap-4 items-end">
-                            {/* Filter Dropdowns */}
                             <div className="flex-grow w-full">
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Filter by Status</label>
                                 <select name="status" value={filters.status} onChange={handleFilterChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none">
@@ -212,11 +211,9 @@ function AppContent() {
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Filter by Type</label>
                                 <select name="bookedFor" value={filters.bookedFor} onChange={handleFilterChange} className="w-full p-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-none">
                                     <option value="">All Types</option>
-                                    {/* Data now from context */}
                                     {collections.containerTypes.map(t => <option key={t.docId} value={t.name}>{t.name}</option>)}
                                 </select>
                             </div>
-                            {/* Sort Buttons */}
                             <div className="flex-shrink-0">
                                  <label className="block text-sm font-medium text-gray-300 mb-1">Sort by</label>
                                  <div className="flex gap-2">
@@ -246,7 +243,7 @@ function AppContent() {
                             <ContainerCard 
                                 key={container.id} 
                                 container={container} 
-                                onSelect={handleOpenModal} 
+                                onSelect={handleOpenModal}
                                 isArchived={pageView === 'archive'}
                                 containerTypes={collections.containerTypes}
                                 recentlyUpdated={recentlyUpdated}
@@ -257,7 +254,7 @@ function AppContent() {
                     <GridContainerView 
                         containers={processedContainers}
                         collections={collections}
-                        onEdit={handleOpenModal} 
+                        onEdit={handleOpenModal}
                         isArchived={pageView === 'archive'}
                         recentlyUpdated={recentlyUpdated}
                     />
@@ -274,6 +271,7 @@ function AppContent() {
             case 'reports': return 'Reports';
             case 'bookings': return 'Bookings Management';
             case 'locations': return 'Location Overview';
+            case 'drivers': return 'Driver Portal';
             default: return 'Container Tracker';
         }
     };
@@ -332,6 +330,13 @@ function AppContent() {
                         >
                             <MapIcon />
                             Locations
+                        </button>
+                        <button
+                            onClick={() => setPageView('drivers')}
+                            className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
+                        >
+                            <TruckIcon /> {/* Reusing TruckIcon as generic driver icon for now or defining SVG inside like others if preferred, but reusing is cleaner given constraints. Actually defined SteeringWheelIcon above. */}
+                            Drivers
                         </button>
                         <button
                             onClick={() => setPageView('archive')}
