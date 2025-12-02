@@ -8,8 +8,14 @@ import InputField from './InputField';
 import { PencilIcon, PlusCircleIcon, TruckIcon, ArchiveIcon, UndoIcon } from '../icons';
 import { useAppContext } from '../context/AppContext';
 import { CONTAINER_STATUSES } from '../constants';
-import { archiveBooking, unarchiveBooking, assignDriverToBooking } from '../services/containerService';
+import { archiveBooking, unarchiveBooking, assignDriverToBooking, createCollectionAssignment } from '../services/containerService';
 import AssignBookingDriverModal from './AssignBookingDriverModal';
+import CreateCollectionModal from './CreateCollectionModal'; // Import new modal
+
+// Simple Down Arrow Icon for "Collect"
+const DownloadIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+);
 
 export default function Bookings() {
     // --- Get data from context ---
@@ -25,7 +31,10 @@ export default function Bookings() {
         openModal
     } = useAppContext();
     
-    const { bookingsPath, archivedBookingsPath } = paths; 
+    const { bookingsPath, archivedBookingsPath } = paths;
+    // Derive pickups path based on bookings path pattern
+    const pickupsPath = bookingsPath.replace('bookings', 'pickups'); 
+
     const collections = collectionsData || {};
     const containerTypes = collections.containerTypes || [];
     const drivers = collections.drivers || [];
@@ -39,13 +48,16 @@ export default function Bookings() {
         id: '',
         quantity: 1,
         type: '',
-        deadline: '', // NEW: Deadline field
+        deadline: '',
     });
     const [isSaving, setIsSaving] = useState(false);
 
-    // --- State for Assign Driver Modal ---
+    // --- State for Modals ---
     const [assignDriverState, setAssignDriverState] = useState({ isOpen: false, booking: null });
     const [selectedDriverForBooking, setSelectedDriverForBooking] = useState('');
+    
+    // --- New: State for Collection Modal ---
+    const [collectionModal, setCollectionModal] = useState({ isOpen: false, booking: null });
 
     // --- Derived Data ---
     const visibleBookings = useMemo(() => {
@@ -92,7 +104,6 @@ export default function Bookings() {
                 id: booking.id,
                 quantity: booking.quantity,
                 type: booking.type,
-                // Convert Timestamp to date string
                 deadline: booking.deadline ? new Date(booking.deadline.seconds * 1000).toISOString().split('T')[0] : '',
             });
         } else {
@@ -184,6 +195,31 @@ export default function Bookings() {
         }
     };
 
+    // --- New Handlers for Collection ---
+    const handleOpenCollection = (booking, e) => {
+        e.stopPropagation();
+        setCollectionModal({ isOpen: true, booking });
+    };
+
+    const handleCreateCollection = async ({ driver, scheduledDate }) => {
+        setIsSaving(true);
+        try {
+            await createCollectionAssignment({
+                pickupsPath,
+                bookingId: collectionModal.booking.id,
+                driverName: driver,
+                scheduledDate
+            });
+            addToast('Collection scheduled successfully!', 'success');
+            setCollectionModal({ isOpen: false, booking: null });
+        } catch (error) {
+            console.error("Error scheduling collection:", error);
+            addToast("Failed to schedule collection.", 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleChange = (e) => {
         const { name, value, type } = e.target;
         setFormData(prev => ({
@@ -212,7 +248,6 @@ export default function Bookings() {
             id: bookingId,
             quantity: formData.quantity,
             type: formData.type,
-            // Convert string date back to Timestamp
             deadline: formData.deadline ? Timestamp.fromDate(new Date(formData.deadline)) : null,
         };
 
@@ -237,8 +272,6 @@ export default function Bookings() {
         return found ? found.emoji : '📍';
     };
 
-    // --- LOGIC FOR THUMBS UP ---
-    // Statuses that trigger the thumbs up (assignable)
     const ASSIGNABLE_STATUSES = [
         'ALL GOOD, BOOK FOR DELIVERY',
         'NEED SQUISH',
@@ -295,7 +328,6 @@ export default function Bookings() {
                         <InputField label="Booking #" name="id" value={formData.id} onChange={handleChange} required disabled={!!editingBooking} />
                         <div className="grid grid-cols-2 gap-4">
                             <InputField label="Quantity" name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
-                            {/* NEW DEADLINE FIELD */}
                             <InputField label="Deadline" name="deadline" type="date" value={formData.deadline} onChange={handleChange} />
                         </div>
                         <div>
@@ -359,7 +391,6 @@ export default function Bookings() {
                         const progress = Math.min((filled / booking.quantity) * 100, 100);
                         const isFull = filled >= booking.quantity;
                         
-                        // Check if any containers have assignable statuses
                         const hasAssignableContainers = containers.some(c => 
                             c.booking === booking.id && ASSIGNABLE_STATUSES.includes(c.status)
                         );
@@ -370,26 +401,20 @@ export default function Bookings() {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{booking.id}</h3>
-                                            {/* Thumbs Up Indicator */}
-                                            <span 
-                                                className={`text-lg transition-colors ${hasAssignableContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`}
-                                                title={hasAssignableContainers ? "Has containers assignable for delivery" : "No assignable containers"}
-                                            >
-                                                👍🏻
-                                            </span>
+                                            <span className={`text-lg transition-colors ${hasAssignableContainers ? 'text-green-400 animate-pulse' : 'text-gray-600 opacity-30'}`} title={hasAssignableContainers ? "Has containers assignable for delivery" : "No assignable containers"}>👍🏻</span>
                                         </div>
                                         <div className="flex flex-col gap-1 mt-1">
                                             <span className="inline-block text-xs font-semibold bg-gray-600 text-blue-200 px-2 py-0.5 rounded border border-gray-500 w-fit">{booking.type}</span>
-                                            {/* Display Deadline */}
-                                            {booking.deadline && (
-                                                <span className="inline-block text-xs font-semibold bg-red-900/50 text-red-200 px-2 py-0.5 rounded border border-red-800 w-fit">
-                                                    Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}
-                                                </span>
-                                            )}
+                                            {booking.deadline && <span className="inline-block text-xs font-semibold bg-red-900/50 text-red-200 px-2 py-0.5 rounded border border-red-800 w-fit">Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}</span>}
                                             {booking.assignedDriver && <span className="inline-block text-xs font-semibold bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded border border-indigo-700 w-fit flex items-center"><TruckIcon /> {booking.assignedDriver}</span>}
                                         </div>
                                     </div>
                                     <div className="flex gap-1 flex-wrap justify-end max-w-[50%]">
+                                        {/* Create Collection / Pickup Button (New) */}
+                                        {activeTab === 'active' && !isFull && (
+                                            <button onClick={(e) => handleOpenCollection(booking, e)} className="p-2 text-gray-400 hover:text-cyan-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Schedule Collection"><DownloadIcon /></button>
+                                        )}
+
                                         <button onClick={(e) => openForm(booking, e)} className="p-2 text-gray-400 hover:text-white hover:bg-gray-600 rounded-full transition-colors z-10" title="Edit Booking"><PencilIcon /></button>
                                         
                                         <button onClick={(e) => handleOpenAssignDriver(booking, e)} className="p-2 text-gray-400 hover:text-indigo-400 hover:bg-gray-600 rounded-full transition-colors z-10" title="Assign Driver"><TruckIcon /></button>
@@ -431,10 +456,20 @@ export default function Bookings() {
                 <AssignBookingDriverModal 
                     booking={assignDriverState.booking}
                     drivers={drivers}
-                    containers={bookingContainersForAssign} // Pass correct container list
+                    containers={bookingContainersForAssign}
                     selectedDriver={selectedDriverForBooking}
                     setSelectedDriver={setSelectedDriverForBooking}
                     onClose={() => setAssignDriverState({ isOpen: false, booking: null })}
+                    isSaving={isSaving}
+                />
+            )}
+
+            {collectionModal.isOpen && (
+                <CreateCollectionModal 
+                    booking={collectionModal.booking}
+                    drivers={drivers}
+                    onClose={() => setCollectionModal({ isOpen: false, booking: null })}
+                    onConfirm={handleCreateCollection}
                     isSaving={isSaving}
                 />
             )}

@@ -11,7 +11,7 @@ import {
     getDocs,
     getDoc,
     writeBatch,
-    setDoc // Ensure setDoc is imported
+    setDoc
 } from 'firebase/firestore';
 import { calculateDaysBetween } from '../utils/dates';
 
@@ -179,21 +179,31 @@ export async function markContainerAsLoaded({ containersPath, eventsPath, contai
     return { loaded: true };
 }
 
-export async function assignDriverToContainer({ containersPath, eventsPath, containerId, selectedDriver, containerData: providedContainerData }) {
+export async function assignDriverToContainer({ containersPath, eventsPath, containerId, selectedDriver, containerData: providedContainerData, scheduledReturn }) {
     const containerRef = doc(db, containersPath, containerId.toUpperCase());
     const containerData = providedContainerData || (await getDoc(containerRef)).data();
     if (!containerData) throw new Error("Container not found");
 
     const newStatus = `Assigned to Driver - ${selectedDriver}`;
+    const updateData = { 
+        status: newStatus, 
+        deliveryDriver: selectedDriver, 
+        lastUpdate: Timestamp.now() 
+    };
+    
+    if (scheduledReturn) {
+        updateData.scheduledReturn = Timestamp.fromDate(new Date(scheduledReturn));
+    }
+
     const batch = writeBatch(db);
-    batch.set(containerRef, { status: newStatus, deliveryDriver: selectedDriver, lastUpdate: Timestamp.now() }, { merge: true });
+    batch.set(containerRef, updateData, { merge: true });
     
     const eventData = {
         containerId: containerId.toUpperCase(),
         timestamp: Timestamp.now(),
         details: { 
             action: 'Assigned to delivery driver', 
-            changes: `Assigned to ${selectedDriver}`,
+            changes: `Assigned to ${selectedDriver}${scheduledReturn ? ` with return scheduled for ${new Date(scheduledReturn).toLocaleString()}` : ''}`,
             previousData: containerData
         }
     };
@@ -354,7 +364,6 @@ export async function markContainerAsRepaired({ containersPath, eventsPath, cont
     return { repaired: true };
 }
 
-// Manual Archive for Bookings
 export async function archiveBooking({ bookingsPath, archivedBookingsPath, booking }) {
     const bookingToArchiveRef = doc(db, bookingsPath, booking.id);
     const archivedBookingRef = doc(db, archivedBookingsPath, booking.id);
@@ -369,12 +378,10 @@ export async function archiveBooking({ bookingsPath, archivedBookingsPath, booki
     return { archived: true };
 }
 
-// --- NEW: Unarchive Booking (Move back to active) ---
 export async function unarchiveBooking({ bookingsPath, archivedBookingsPath, booking }) {
     const bookingToActiveRef = doc(db, bookingsPath, booking.id);
     const archivedBookingRef = doc(db, archivedBookingsPath, booking.id);
     
-    // Create data for active (remove archivedAt)
     const activeBookingData = { ...booking };
     delete activeBookingData.archivedAt;
     
@@ -386,9 +393,27 @@ export async function unarchiveBooking({ bookingsPath, archivedBookingsPath, boo
     return { unarchived: true };
 }
 
-// --- NEW: Assign Driver to Booking ---
 export async function assignDriverToBooking({ bookingPath, bookingId, driverName }) {
     const bookingRef = doc(db, bookingPath, bookingId);
     await setDoc(bookingRef, { assignedDriver: driverName }, { merge: true });
     return { success: true };
+}
+
+// --- NEW: Create Collection Assignment (Pickup) ---
+export async function createCollectionAssignment({ pickupsPath, bookingId, driverName, scheduledDate }) {
+    // Generate a simple unique ID for the pickup job
+    const pickupId = `COL-${Date.now()}`;
+    const pickupRef = doc(db, pickupsPath, pickupId);
+    
+    const data = {
+        id: pickupId,
+        bookingId,
+        driver: driverName,
+        scheduledDate: Timestamp.fromDate(scheduledDate),
+        createdAt: Timestamp.now(),
+        status: 'Scheduled'
+    };
+
+    await setDoc(pickupRef, data);
+    return { success: true, id: pickupId };
 }
