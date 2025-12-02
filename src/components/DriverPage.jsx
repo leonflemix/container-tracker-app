@@ -3,9 +3,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
-import { TruckIcon, CalendarDaysIcon, MapPinIcon } from '../icons';
+import { TruckIcon, CalendarDaysIcon, PlusCircleIcon } from '../icons';
 
 // Simple Icons for this page
 const UserIcon = () => (
@@ -19,7 +19,6 @@ export default function DriverPage() {
     const { 
         collections: collectionsData, 
         containers, 
-        bookings, 
         paths,
         openModal 
     } = useAppContext();
@@ -67,182 +66,156 @@ export default function DriverPage() {
         return pickups.filter(p => p.driver === selectedDriverName);
     }, [pickups, selectedDriverName]);
 
-    const myBookings = useMemo(() => {
-        if (!selectedDriverName) return [];
-        // Bookings explicitly assigned to this driver
-        return bookings.filter(b => b.assignedDriver === selectedDriverName);
-    }, [bookings, selectedDriverName]);
-
+    // --- Login Screen ---
     if (!selectedDriverName) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] bg-gray-800 rounded-lg p-8">
-                <div className="bg-gray-700 p-4 rounded-full mb-4">
-                    <UserIcon />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-4">Driver Portal Login</h2>
-                <div className="w-full max-w-xs">
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Select Your Profile</label>
-                    <select 
-                        value={selectedDriverName} 
-                        onChange={(e) => setSelectedDriverName(e.target.value)} 
-                        className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="">-- Choose Driver --</option>
-                        {drivers.map(d => (
-                            <option key={d.docId} value={d.name}>{d.name}</option>
-                        ))}
-                    </select>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] bg-gray-900 p-4">
+                <div className="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm text-center border border-gray-700">
+                    <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <UserIcon />
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Driver Portal</h2>
+                    <p className="text-gray-400 mb-6 text-sm">Please select your profile to view your schedule.</p>
+                    
+                    <div className="text-left">
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Select Driver</label>
+                        <select 
+                            value={selectedDriverName} 
+                            onChange={(e) => setSelectedDriverName(e.target.value)} 
+                            className="w-full p-4 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg appearance-none"
+                        >
+                            <option value="">-- Choose Name --</option>
+                            {drivers.map(d => (
+                                <option key={d.docId} value={d.name}>{d.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            {/* Header / Driver Info */}
-            <div className="bg-gray-800 p-6 rounded-lg shadow-lg flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                    <div className="bg-blue-600 p-3 rounded-full text-white">
+        <div className="pb-20 max-w-lg mx-auto"> 
+            {/* Mobile Header */}
+            <div className="sticky top-0 z-20 bg-gray-900/95 backdrop-blur border-b border-gray-800 p-4 mb-4 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    <div className="bg-blue-600 p-2 rounded-full text-white shadow-lg">
                         <TruckIcon />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Welcome, {selectedDriverName}</h1>
-                        <p className="text-gray-400 text-sm">
-                            {myDeliveries.length} Deliveries • {myPickups.length} Collections Pending
+                        <h1 className="text-lg font-bold text-white leading-tight">{selectedDriverName}</h1>
+                        <p className="text-xs text-gray-400">
+                            {myDeliveries.length} Active • {myPickups.length} Collections
                         </p>
                     </div>
                 </div>
                 <button 
                     onClick={() => setSelectedDriverName('')}
-                    className="text-sm text-gray-400 hover:text-white underline"
+                    className="text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-3 rounded-lg border border-gray-700 transition-colors"
                 >
-                    Switch Driver
+                    Log Out
                 </button>
             </div>
 
-            {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6 px-2">
                 
-                {/* 1. Deliveries Panel */}
-                <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                    <div className="p-4 border-b border-gray-700 bg-gray-750 flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <BoxIcon /> 
-                            Active Deliveries 
-                            <span className="bg-blue-600 text-xs px-2 py-0.5 rounded-full">{myDeliveries.length}</span>
+                {/* 1. SCHEDULED COLLECTIONS (Pickups) */}
+                {myPickups.length > 0 && (
+                    <section>
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1 flex justify-between items-end">
+                            <span>Pickups (Collections)</span>
+                            <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full">{myPickups.length}</span>
                         </h3>
-                    </div>
-                    <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                        {myDeliveries.length > 0 ? (
-                            myDeliveries.map(container => (
+                        <div className="space-y-3">
+                            {myPickups.map(pickup => (
                                 <div 
-                                    key={container.id} 
-                                    onClick={() => openModal(container.id)}
-                                    className="bg-gray-700 p-4 rounded-lg cursor-pointer hover:border-blue-500 border border-transparent transition-all"
+                                    key={pickup.id} 
+                                    className="bg-gray-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm relative overflow-hidden"
                                 >
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className="font-bold text-blue-300 text-lg">{container.id}</span>
-                                        <span className="text-xs font-mono bg-gray-900 px-2 py-1 rounded text-gray-400">
-                                            {container.status}
-                                        </span>
-                                    </div>
-                                    <div className="text-sm text-gray-300 space-y-1">
-                                        <div className="flex justify-between">
-                                            <span>Booking:</span>
-                                            <span className="text-white">{container.booking}</span>
+                                    <div className="flex justify-between items-start mb-3 relative z-10">
+                                        <div>
+                                            <span className="block text-xs text-green-400 font-bold mb-1">COLLECT FROM PORT</span>
+                                            <span className="text-xl font-bold text-white block">{pickup.bookingId}</span>
                                         </div>
-                                        {container.scheduledReturn && (
-                                            <div className="flex justify-between text-yellow-400 font-semibold">
-                                                <span>Return By:</span>
-                                                <span>{new Date(container.scheduledReturn.seconds * 1000).toLocaleString()}</span>
+                                        {pickup.scheduledDate && (
+                                            <div className="text-right bg-gray-900/50 p-2 rounded-lg">
+                                                <span className="block text-xs text-gray-400 font-bold uppercase">{pickup.scheduledDate.toLocaleDateString([], {weekday: 'short'})}</span>
+                                                <span className="block text-lg font-bold text-white">{pickup.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                             </div>
                                         )}
                                     </div>
+                                    
+                                    <button 
+                                        onClick={() => openModal(null)} 
+                                        className="w-full mt-2 py-3 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-md"
+                                    >
+                                        <PlusCircleIcon />
+                                        <span>Confirm Collection (Add)</span>
+                                    </button>
                                 </div>
-                            ))
-                        ) : (
-                            <p className="text-gray-500 text-center py-8">No active deliveries assigned.</p>
-                        )}
-                    </div>
-                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
-                {/* 2. Collections Panel */}
-                <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                    <div className="p-4 border-b border-gray-700 bg-gray-750 flex justify-between items-center">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <TruckIcon /> 
-                            Scheduled Collections
-                            <span className="bg-green-600 text-xs px-2 py-0.5 rounded-full">{myPickups.length}</span>
-                        </h3>
-                    </div>
-                    <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                        {myPickups.length > 0 ? (
-                            myPickups.map(pickup => (
+                {/* 2. ACTIVE DELIVERIES */}
+                <section>
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1 flex justify-between items-end">
+                        <span>Active Deliveries</span>
+                        <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">{myDeliveries.length}</span>
+                    </h3>
+                    
+                    {myDeliveries.length > 0 ? (
+                        <div className="space-y-3">
+                            {myDeliveries.map(container => (
                                 <div 
-                                    key={pickup.id} 
-                                    className="bg-gray-700 p-4 rounded-lg border-l-4 border-green-500"
+                                    key={container.id} 
+                                    onClick={() => openModal(container.id)}
+                                    className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm active:bg-gray-750 transition-colors cursor-pointer"
                                 >
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="font-bold text-green-300 text-lg">COLLECTION</span>
-                                        {pickup.scheduledDate && (
-                                            <span className="text-sm bg-gray-900 px-2 py-1 rounded text-gray-300 flex items-center gap-1">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-gray-700 p-2 rounded-lg text-blue-400">
+                                                <BoxIcon />
+                                            </div>
+                                            <div>
+                                                <span className="block text-lg font-bold text-white">{container.id}</span>
+                                                <span className="text-xs text-gray-400">Booking: {container.booking}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Status Badge */}
+                                    <div className="mt-3 flex justify-between items-center">
+                                        <span className="inline-block bg-gray-900 text-gray-300 text-xs px-3 py-1.5 rounded-md font-medium border border-gray-700 truncate max-w-[70%]">
+                                            {container.status}
+                                        </span>
+                                        {container.scheduledReturn && (
+                                            <span className="text-xs text-yellow-500 font-bold flex items-center gap-1">
                                                 <CalendarDaysIcon />
-                                                {pickup.scheduledDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                Due: {new Date(container.scheduledReturn.seconds * 1000).toLocaleDateString()}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-sm text-gray-300">
-                                        <p className="mb-1"><span className="text-gray-500">Booking:</span> {pickup.bookingId}</p>
-                                        <p className="mb-1"><span className="text-gray-500">Date:</span> {pickup.scheduledDate?.toLocaleDateString()}</p>
-                                        <div className="mt-3">
-                                            {/* In future updates, buttons like "Arrived" or "Picked Up" would go here */}
-                                            <button 
-                                                className="w-full py-2 bg-gray-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
-                                                onClick={() => openModal(null)} // Or open a specific collection modal
-                                            >
-                                                Start Collection
-                                            </button>
-                                        </div>
-                                    </div>
                                 </div>
-                            ))
-                        ) : (
-                            <p className="text-gray-500 text-center py-8">No collections scheduled.</p>
-                        )}
-                    </div>
-                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-gray-800/50 rounded-xl p-8 text-center border-2 border-dashed border-gray-700">
+                            <p className="text-gray-500 font-medium">No deliveries assigned.</p>
+                        </div>
+                    )}
+                </section>
 
-                {/* 3. Assigned Bookings (Overview) */}
-                <div className="col-span-1 lg:col-span-2 bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-                    <div className="p-4 border-b border-gray-700 bg-gray-750">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                            <MapPinIcon /> 
-                            Booking Responsibility
-                            <span className="bg-indigo-600 text-xs px-2 py-0.5 rounded-full">{myBookings.length}</span>
-                        </h3>
+                {/* Empty State Helper */}
+                {myPickups.length === 0 && myDeliveries.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-center opacity-50">
+                        <TruckIcon />
+                        <p className="mt-4 text-gray-400">You are all caught up!</p>
+                        <p className="text-sm text-gray-600">No active jobs assigned to {selectedDriverName}.</p>
                     </div>
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {myBookings.length > 0 ? (
-                            myBookings.map(booking => (
-                                <div key={booking.id} className="bg-gray-700 p-4 rounded-lg flex flex-col justify-between">
-                                    <div>
-                                        <h4 className="font-bold text-white text-lg">{booking.id}</h4>
-                                        <p className="text-sm text-gray-400">{booking.type}</p>
-                                        {booking.deadline && (
-                                            <p className="text-xs text-red-300 mt-1">Deadline: {new Date(booking.deadline.seconds * 1000).toLocaleDateString()}</p>
-                                        )}
-                                    </div>
-                                    <div className="mt-4 pt-3 border-t border-gray-600">
-                                        <span className="text-xs text-indigo-300 uppercase font-bold">Primary Driver</span>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="col-span-full text-gray-500 text-center py-4">No full bookings assigned as primary driver.</p>
-                        )}
-                    </div>
-                </div>
-
+                )}
             </div>
         </div>
     );
