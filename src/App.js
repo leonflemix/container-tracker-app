@@ -1,7 +1,7 @@
 // File: src/App.js
 // Location: src
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 // We no longer need data-fetching imports here
 import { CONTAINER_STATUSES } from './constants';
 import { TruckIcon, PlusIcon, DocumentPlusIcon, DatabaseIcon, ArchiveIcon, ChartIcon, FilterIcon, SortAscIcon, SortDescIcon, HomeIcon } from './icons';
@@ -14,6 +14,8 @@ import DriverPage from './components/DriverPage';
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
+import PublicPage from './components/PublicPage'; 
+import DriverPortal from './components/DriverPortal'; // Import new DriverPortal
 import { ToastProvider } from './hooks/useToasts';
 import Dashboard from './components/Dashboard';
 import { AppProvider, useAppContext } from './context/AppContext';
@@ -31,17 +33,16 @@ function AppContent() {
         recentlyUpdated,
         isModalOpen,
         openModal,
-        openNewContainerModal, // Use new context method
+        openNewContainerModal, 
         closeModal,
         selectedContainer,
         selectedContainerId,
-        preselectedBooking // Get from context now
+        preselectedBooking 
     } = useAppContext();
     
     // --- LOCAL UI STATE ---
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
-    // REMOVED local preselectedBooking state
     const [searchTerm, setSearchTerm] = useState('');
     const [pageView, setPageView] = useState('dashboard');
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
@@ -58,20 +59,20 @@ function AppContent() {
     const [showFilters, setShowFilters] = useState(false);
 
     // --- Save preferences ---
-    React.useEffect(() => {
+    useEffect(() => {
         localStorage.setItem('containerTrackerView', view);
     }, [view]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         localStorage.setItem('containerTrackerSort', JSON.stringify(sortConfig));
     }, [sortConfig]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         localStorage.setItem('containerTrackerFilters', JSON.stringify(filters));
     }, [filters]);
 
     // --- Dynamically load external scripts ---
-    React.useEffect(() => {
+    useEffect(() => {
         const scriptId = 'tailwind-cdn';
         if (!document.getElementById(scriptId)) {
             const script = document.createElement('script');
@@ -93,7 +94,6 @@ function AppContent() {
     
     const handleSelectBookingForContainerAdd = (bookingId) => {
         setIsBookingModalOpen(false);
-        // Use the new context method which sets preselectedBooking in state
         openNewContainerModal(bookingId); 
     };
 
@@ -400,6 +400,26 @@ function AppContent() {
 
 // Wrap AppContent with the provider
 export default function App() {
+    // --- SIMPLE ROUTING LOGIC ---
+    // Check if the URL has ?mode=public (or any specific param you want)
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+
+    if (mode === 'public') {
+        return <PublicPage />;
+    }
+
+    // NEW: Check for driver mode
+    if (mode === 'driver') {
+        return (
+            <ToastProvider>
+                <AppProvider>
+                    <DriverPortal />
+                </AppProvider>
+            </ToastProvider>
+        );
+    }
+
     return (
         <ToastProvider>
             <AppProvider>
