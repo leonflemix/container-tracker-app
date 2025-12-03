@@ -40,6 +40,10 @@ export const AppProvider = ({ children }) => {
     const [selectedContainer, setSelectedContainer] = useState(null);
     const [events, setEvents] = useState([]);
 
+    // --- NEW: State for New Container Workflow ---
+    const [preselectedBooking, setPreselectedBooking] = useState(null);
+    const [pendingCollectionId, setPendingCollectionId] = useState(null); // ID of pickup being fulfilled
+
     // --- Environment-aware Paths ---
     const isCanvasEnv = typeof window !== 'undefined' && typeof window.__app_id !== 'undefined';
     const appId = isCanvasEnv ? window.__app_id : 'container-tracker-app';
@@ -187,12 +191,11 @@ export const AppProvider = ({ children }) => {
     }, [user, paths.eventsPath, addToast]);
 
     // --- Modal Data Logic ---
-    // This effect finds the container *and* fetches its events when the ID changes
     useEffect(() => {
         if (selectedContainerId && user) {
             // Find the container in state
             const foundContainer = containers.find(c => c.id === selectedContainerId) || archivedContainers.find(c => c.id === selectedContainerId);
-            setSelectedContainer(foundContainer || null); // Set it (or null if not found)
+            setSelectedContainer(foundContainer || null); 
 
             // Fetch its events
             const q = query(collection(db, paths.eventsPath), where("containerId", "==", selectedContainerId));
@@ -208,7 +211,6 @@ export const AppProvider = ({ children }) => {
             return () => unsubscribe();
 
         } else if (selectedContainerId === null) {
-            // It's a "New Container"
             setSelectedContainer(null);
             setEvents([]);
         }
@@ -229,7 +231,20 @@ export const AppProvider = ({ children }) => {
     
     // --- Modal Public API ---
     const openModal = useCallback((containerId) => {
-        setSelectedContainerId(containerId); // This triggers the useEffect above
+        setSelectedContainerId(containerId);
+        // Clear pre-selections if opening an existing container
+        if (containerId) {
+            setPreselectedBooking(null);
+            setPendingCollectionId(null);
+        }
+        setIsModalOpen(true);
+    }, []);
+
+    // NEW: Open modal specifically for creating a new container (with optional booking/collection context)
+    const openNewContainerModal = useCallback((bookingId = null, collectionId = null) => {
+        setSelectedContainerId(null); // It's new
+        setPreselectedBooking(bookingId);
+        setPendingCollectionId(collectionId);
         setIsModalOpen(true);
     }, []);
 
@@ -238,11 +253,12 @@ export const AppProvider = ({ children }) => {
         setSelectedContainerId(null);
         setSelectedContainer(null);
         setEvents([]);
+        setPreselectedBooking(null);
+        setPendingCollectionId(null);
     }, []);
 
     // --- Value to provide to consumers ---
     const value = {
-        // Data
         user,
         containers,
         archivedContainers,
@@ -252,27 +268,23 @@ export const AppProvider = ({ children }) => {
         loading,
         recentlyUpdated,
         paths,
-
-        // Derived Data
         filledBookingCounts,
         openBookings,
-        
-        // Modal State & Data
         isModalOpen,
         selectedContainerId,
         selectedContainer,
         events,
-        
-        // Actions
+        preselectedBooking, // Exported
+        pendingCollectionId, // Exported
         addToast,
         openModal,
+        openNewContainerModal, // Exported
         closeModal,
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
-// Create the custom hook
 export const useAppContext = () => {
     const context = useContext(AppContext);
     if (!context) {
@@ -280,4 +292,3 @@ export const useAppContext = () => {
     }
     return context;
 };
-

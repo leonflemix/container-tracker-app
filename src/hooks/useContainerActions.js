@@ -15,7 +15,8 @@ import {
     returnToTilter,
     markDeniedAwaitingUpdate,
     reviveContainer,
-    markContainerAsRepaired
+    markContainerAsRepaired,
+    deleteCollectionAssignment // Added import
 } from '../services/containerService';
 import { CONTAINER_STATUSES } from '../constants';
 import { useAppContext } from '../context/AppContext';
@@ -38,17 +39,18 @@ export default function useContainerActions({
         containers,
         archivedContainers,
         openBookings,
-        collections, // <-- BUG FIX: Destructure 'collections' directly
+        collections,
         paths,
         addToast,
-        filledBookingCounts
+        filledBookingCounts,
+        pendingCollectionId // Get pending collection ID
     } = useAppContext();
 
     // Re-alias for clarity in service calls
     const allContainers = containers;
     const allArchivedContainers = archivedContainers;
-    // const collections = collectionsData; // <-- BUG FIX: This alias is no longer needed
     const { containersPath, eventsPath, archivePath, bookingsPath, archivedBookingsPath } = paths;
+    const pickupsPath = bookingsPath ? bookingsPath.replace('bookings', 'pickups') : null;
 
     // --- Local state for modal actions ---
     const [isSaving, setIsSaving] = useState(false);
@@ -73,7 +75,6 @@ export default function useContainerActions({
         if (!file) return;
         const parsed = await processFile(file);
         if (parsed) {
-            // Update formData state managed by useContainerForm
             setFormData(prev => ({
                 ...prev,
                 id: parsed.id || prev.id,
@@ -99,7 +100,6 @@ export default function useContainerActions({
 
         if (!formData.status) {
             addToast("Form data is not ready.", 'error');
-            console.error("Attempted to submit with missing status in formData", formData);
             return;
         }
 
@@ -123,6 +123,13 @@ export default function useContainerActions({
                     openBookings,
                     filledBookingCounts
                 });
+                
+                // --- CHECK FOR PENDING COLLECTION ---
+                if (pendingCollectionId && pickupsPath) {
+                    await deleteCollectionAssignment({ pickupsPath, pickupId: pendingCollectionId });
+                    addToast(`Scheduled collection completed and removed from list.`, 'success');
+                }
+
                 addToast(`Container ${formData.id.toUpperCase()} added successfully!`, 'success');
             } else {
                 const result = await updateContainerWithChanges({ containersPath, eventsPath, container, formData });
@@ -155,7 +162,6 @@ export default function useContainerActions({
         if (!selectedLocation) { addToast("Please select a location.", 'error'); return; }
         setIsSaving(true);
         try {
-            // --- OPTIMIZATION: Pass containerData ---
             await moveContainerToLocation({ containersPath, eventsPath, containerId: container.id, selectedLocation, containerData: container });
             addToast(`Container moved to ${selectedLocation}.`, 'success');
             onClose();
@@ -169,7 +175,6 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-             // --- OPTIMIZATION: Pass containerData ---
             await markContainerAsLoaded({ containersPath, eventsPath, containerId: container.id, oldStatus: container.status, containerData: container });
             addToast('Container marked as loaded.', 'success');
             onClose();
@@ -185,7 +190,6 @@ export default function useContainerActions({
         if (!selectedDriver) { addToast("Please select a driver to assign.", 'error'); return; }
         setIsSaving(true);
         try {
-             // --- OPTIMIZATION: Pass containerData ---
             await assignDriverToContainer({ containersPath, eventsPath, containerId: container.id, selectedDriver, containerData: container });
             addToast(`Container assigned to ${selectedDriver}.`, 'success');
             onClose();
@@ -249,7 +253,6 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-             // --- OPTIMIZATION: Pass containerData ---
             await returnToTilter({ containersPath, eventsPath, containerId: container.id, containerData: container });
             addToast('Container status reset to New.', 'success');
             onClose();
@@ -265,7 +268,6 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-             // --- OPTIMIZATION: Pass containerData ---
             await markDeniedAwaitingUpdate({ containersPath, eventsPath, containerId: container.id, containerData: container });
             addToast('Container marked as "Denied - Awaiting Update".', 'success');
             onClose();
@@ -296,7 +298,6 @@ export default function useContainerActions({
         if (!container) return;
         setIsSaving(true);
         try {
-             // --- OPTIMIZATION: Pass containerData ---
             await markContainerAsRepaired({ 
                 containersPath, 
                 eventsPath, 
@@ -314,15 +315,12 @@ export default function useContainerActions({
         }
     };
 
-    // --- Derived State for UI ---
-
     const isAtLocation = useMemo(() => {
-        // --- BUG FIX: Add safety check for collections and collections.locations ---
         if (!container?.status || !collections || !Array.isArray(collections.locations)) {
             return false;
         }
         return collections.locations.some(loc => loc.location === container.status);
-    }, [container, collections]); // <-- Use collections directly
+    }, [container, collections]);
 
     const isInWorkshop = useMemo(() => {
         return container?.status === 'IN WORKSHOP';
@@ -383,4 +381,3 @@ export default function useContainerActions({
         handleMarkAsRepaired
     };
 }
-

@@ -10,7 +10,7 @@ import GridContainerView from './components/GridContainerView';
 import ReportsPage from './components/ReportsPage';
 import Bookings from './components/Bookings';
 import Locations from './components/Locations';
-import DriverPage from './components/DriverPage'; // Import Driver Page
+import DriverPage from './components/DriverPage';
 import BookingModal from './components/BookingModal';
 import ContainerModal from './components/ContainerModal';
 import CollectionsModal from './components/CollectionsModal';
@@ -22,11 +22,6 @@ const MapIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
 );
 
-// Icon for Driver Page
-const SteeringWheelIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mr-2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20"/><path d="M2 12h20"/><path d="m4.93 4.93 14.14 14.14"/><path d="m19.07 4.93-14.14 14.14"/></svg>
-);
-
 function AppContent() {
     const {
         containers,
@@ -36,17 +31,19 @@ function AppContent() {
         recentlyUpdated,
         isModalOpen,
         openModal,
+        openNewContainerModal, // Use new context method
         closeModal,
         selectedContainer,
-        selectedContainerId
+        selectedContainerId,
+        preselectedBooking // Get from context now
     } = useAppContext();
     
     // --- LOCAL UI STATE ---
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isCollectionsModalOpen, setIsCollectionsModalOpen] = useState(false);
-    const [preselectedBooking, setPreselectedBooking] = useState(null);
+    // REMOVED local preselectedBooking state
     const [searchTerm, setSearchTerm] = useState('');
-    const [pageView, setPageView] = useState('dashboard'); // Added 'drivers'
+    const [pageView, setPageView] = useState('dashboard');
     const [view, setView] = useState(() => localStorage.getItem('containerTrackerView') || 'card');
     
     // State for sorting and filtering
@@ -87,19 +84,17 @@ function AppContent() {
     // --- Event Handlers ---
     
     const handleOpenModal = (container = null) => {
-        setPreselectedBooking(null);
         openModal(container ? container.id : null);
     };
 
     const handleCloseModal = () => {
         closeModal();
-        setPreselectedBooking(null);
     };
     
     const handleSelectBookingForContainerAdd = (bookingId) => {
-        setPreselectedBooking(bookingId);
         setIsBookingModalOpen(false);
-        openModal(null); 
+        // Use the new context method which sets preselectedBooking in state
+        openNewContainerModal(bookingId); 
     };
 
     const handleFilterChange = (e) => {
@@ -172,7 +167,7 @@ function AppContent() {
         if (pageView === 'locations') {
             return <Locations />;
         }
-        if (pageView === 'drivers') { // New Driver Page
+        if (pageView === 'drivers') { 
             return <DriverPage />;
         }
         
@@ -335,7 +330,7 @@ function AppContent() {
                             onClick={() => setPageView('drivers')}
                             className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 w-full sm:w-auto"
                         >
-                            <TruckIcon /> {/* Reusing TruckIcon as generic driver icon for now or defining SVG inside like others if preferred, but reusing is cleaner given constraints. Actually defined SteeringWheelIcon above. */}
+                            <TruckIcon />
                             Drivers
                         </button>
                         <button

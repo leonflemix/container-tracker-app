@@ -6,7 +6,6 @@ import { db } from '../firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { TruckIcon, CalendarDaysIcon, PlusCircleIcon } from '../icons';
-import { deleteCollectionAssignment } from '../services/containerService'; // Import delete service
 
 // Simple Icons for this page
 const UserIcon = () => (
@@ -21,8 +20,9 @@ export default function DriverPage() {
         collections: collectionsData, 
         containers, 
         paths,
-        openModal,
-        addToast // Get addToast from context
+        openModal, // <-- Added back openModal
+        openNewContainerModal, 
+        addToast
     } = useAppContext();
 
     const collections = collectionsData || {};
@@ -69,18 +69,13 @@ export default function DriverPage() {
     }, [pickups, selectedDriverName]);
 
     // --- Actions ---
-    const handleConfirmCollection = async (pickup) => {
-        if (window.confirm(`Start collection for Booking ${pickup.bookingId}? This will remove the scheduled task from your list and the bookings board.`)) {
-            try {
-                // Delete the pickup assignment as it's now being actioned
-                await deleteCollectionAssignment({ pickupsPath, pickupId: pickup.id });
-                addToast("Collection started. Please add the container details.", "success");
-                // Open modal to add the actual container
-                openModal(null);
-            } catch (error) {
-                console.error("Failed to update collection status", error);
-                addToast("Failed to update status", "error");
-            }
+    const handleConfirmCollection = (pickup) => {
+        if (window.confirm(`Start collection for Booking ${pickup.bookingId}?`)) {
+            // Open the new container modal with context.
+            // This sets 'pendingCollectionId' in AppContext, which useContainerActions will read
+            // to delete the pickup assignment upon successful submission.
+            openNewContainerModal(pickup.bookingId, pickup.id);
+            addToast("Please enter the container details to confirm collection.", "info");
         }
     };
 
@@ -150,7 +145,7 @@ export default function DriverPage() {
                             {myDeliveries.map(container => (
                                 <div 
                                     key={container.id} 
-                                    onClick={() => openModal(container.id)}
+                                    onClick={() => openModal(container.id)} // View details
                                     className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm active:bg-gray-750 transition-colors cursor-pointer"
                                 >
                                     <div className="flex justify-between items-start mb-2">
